@@ -48,7 +48,7 @@ services:
   core:
     build:
       context: ../services/core
-      dockerfile: ../../infra/core.Dockerfile
+      dockerfile: Dockerfile
     container_name: previopls-core
     restart: unless-stopped
     networks: [previopls]

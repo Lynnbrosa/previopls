@@ -8,7 +8,7 @@ Serviço Spring Boot 3 que persiste o domínio e dispara a classificação ML.
 2. **Connect a repository**: `Lynnbrosa/previopls`.
 3. **Name**: `previopls-core`.
 4. **Root Directory**: `services/core`.
-5. **Runtime**: `Docker`. Dockerfile em `infra/core.Dockerfile` (especificar em **Dockerfile Path**).
+5. **Runtime**: `Docker`. Dockerfile do próprio diretório (`services/core/Dockerfile`, autodetectado pelo Render).
 6. **Plan**: Free.
 7. **Health Check Path**: `/health`.
 

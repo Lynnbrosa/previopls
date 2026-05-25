@@ -42,7 +42,7 @@ Os schemas são parecidos por desenho, ver [`ARCHITECTURE.md`](../ARCHITECTURE.m
 
 - `services/gateway/Dockerfile`: usado tal qual está no subtree.
 - `services/ml/api/Dockerfile`: criado na Fase 4 (este monorepo).
-- `infra/core.Dockerfile`: build multi-stage Maven + JRE 21, usado pelo compose porque o subtree do Core não trazia Dockerfile próprio. Pode ser substituído por um interno ao serviço sem alterar o compose.
+- `services/core/Dockerfile`: build multi-stage Maven + JRE 21. Adicionado ao serviço Core para que o compose e plataformas de deploy (Render, Vercel) detectem automaticamente.
 - `apps/admin-web/Dockerfile`: criado na Fase 5 (Next.js standalone).
 
 ## Healthchecks e ordem de boot
