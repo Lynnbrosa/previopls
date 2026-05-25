@@ -65,6 +65,6 @@ Cada serviço continua tendo seu próprio fluxo. Veja os READMEs:
 - [`services/ml/notebook/README.md`](../services/ml/notebook/README.md): `jupyter notebook`.
 - [`apps/consultor-mobile/README.md`](../apps/consultor-mobile/README.md): `npm start`.
 
-## Deploy para Railway
+## Deploy para piloto
 
-A pasta [`railway/`](railway/) contém as specs por serviço. Não há comando de deploy automatizado; o deploy é manual.
+A pasta [`deploy/`](deploy/) contém as specs por provedor: Vercel para o admin-web, Render para os 3 backends, Neon para o Postgres. Stack escolhida por priorizar free tier sem cartão amarrado. Não há comando de deploy automatizado; o deploy é manual.

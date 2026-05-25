@@ -36,7 +36,7 @@ O Gateway é a borda pública. Termina TLS, valida JWT, aplica rate limit, verif
 | App consultor         | React Native 0.74, Expo SDK 51, TypeScript                   |
 | Painel de gestão      | Next.js 14, Tailwind, shadcn/ui, Recharts                    |
 | Orquestração local    | Docker Compose                                               |
-| Deploy alvo           | Railway (gateway público, core e ml-api privados)            |
+| Deploy alvo           | Vercel (admin-web) + Render (gateway, core, ml-api) + Neon (Postgres) |
 
 ## Como rodar localmente
 
@@ -98,7 +98,7 @@ previopls/
 │   └── admin-web/           Next.js · painel para gestor de pós-venda
 ├── infra/
 │   ├── docker-compose.yml
-│   └── railway/             Specs por serviço para o deploy gerenciado
+│   └── deploy/              Specs por serviço (Vercel, Render, Neon)
 └── scripts/
     └── build-seed/          Gerador de seed determinístico a partir do dataset Ford
 ```
