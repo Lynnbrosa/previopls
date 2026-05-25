@@ -1,0 +1,288 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "PrevioPLS API",
+    "version": "v1",
+    "description": "API REST da plataforma Ford Predict & Care (PrevioPLS) — backend SOA para retenção pós-venda. Atende às histórias US01–US07.",
+    "contact": { "name": "Equipe PrevioPLS — Challenge Ford FIAP 2026" }
+  },
+  "servers": [
+    { "url": "http://localhost:5000", "description": "Local" },
+    { "url": "https://api.previopls.example.com", "description": "Produção" }
+  ],
+  "tags": [
+    { "name": "meta", "description": "Saúde e descoberta do serviço" },
+    { "name": "auth", "description": "Autenticação (JWT)" },
+    { "name": "clientes", "description": "Cadastro D0 da compra — dispara classificação" },
+    { "name": "leads", "description": "Leads priorizados consumidos pelo app mobile" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" }
+    },
+    "schemas": {
+      "Erro": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string", "example": "VALIDATION_ERROR" },
+              "message": { "type": "string", "example": "Dados inválidos" },
+              "details": { "type": "object", "additionalProperties": true }
+            },
+            "required": ["code", "message"]
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["ok", "degraded"] },
+          "components": {
+            "type": "object",
+            "properties": { "database": { "type": "string", "enum": ["up", "down"] } }
+          }
+        }
+      },
+      "VersionResponse": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "example": "PrevioPLS API" },
+          "version": { "type": "string", "example": "v1" },
+          "build": { "type": "string", "example": "1.0.0" }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "senha"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "example": "consultor@ford.com" },
+          "senha": { "type": "string", "minLength": 6, "maxLength": 128, "example": "cons123" }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "required": ["accessToken", "tokenType", "expiresIn", "role"],
+        "properties": {
+          "accessToken": { "type": "string" },
+          "tokenType": { "type": "string", "default": "Bearer" },
+          "expiresIn": { "type": "integer", "example": 28800 },
+          "role": { "type": "string", "enum": ["admin", "consultor"] }
+        }
+      },
+      "VeiculoRequest": {
+        "type": "object",
+        "required": ["modelo", "versao", "ano", "vin", "dataCompra", "valorCompra", "concessionariaId"],
+        "properties": {
+          "modelo": { "type": "string", "maxLength": 80, "example": "Ranger" },
+          "versao": { "type": "string", "maxLength": 80, "example": "XLT" },
+          "ano": { "type": "integer", "minimum": 2000, "maximum": 2100, "example": 2026 },
+          "vin": { "type": "string", "minLength": 17, "maxLength": 17, "pattern": "^[A-HJ-NPR-Z0-9]{17}$", "example": "9BFZZZ8F7NB000001" },
+          "dataCompra": { "type": "string", "format": "date", "example": "2026-05-13" },
+          "valorCompra": { "type": "string", "format": "decimal", "example": "250000.00" },
+          "concessionariaId": { "type": "string", "maxLength": 40, "example": "FORD-SP-001" }
+        }
+      },
+      "VeiculoResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/VeiculoRequest" },
+          { "type": "object", "properties": { "id": { "type": "string", "format": "uuid" } } }
+        ]
+      },
+      "ClienteCreateRequest": {
+        "type": "object",
+        "required": ["nome", "cpf", "regiao", "veiculo"],
+        "properties": {
+          "nome": { "type": "string", "minLength": 2, "maxLength": 180, "example": "Maria Silva" },
+          "cpf": { "type": "string", "pattern": "^\\d{11}$", "example": "12345678900" },
+          "email": { "type": "string", "format": "email", "nullable": true },
+          "telefone": { "type": "string", "maxLength": 20, "nullable": true, "example": "+5511999998888" },
+          "regiao": { "type": "string", "maxLength": 40, "example": "SP" },
+          "veiculo": { "$ref": "#/components/schemas/VeiculoRequest" }
+        }
+      },
+      "ClienteResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "nome": { "type": "string" },
+          "cpf": { "type": "string" },
+          "email": { "type": "string", "nullable": true },
+          "telefone": { "type": "string", "nullable": true },
+          "regiao": { "type": "string" },
+          "perfil": { "type": "string", "enum": ["fiel", "abandono", "esquecido", "economico"], "nullable": true },
+          "scoreRisco": { "type": "number", "format": "float", "nullable": true, "example": 0.87 },
+          "criadoEm": { "type": "string", "format": "date-time" },
+          "classificadoEm": { "type": "string", "format": "date-time", "nullable": true },
+          "veiculos": { "type": "array", "items": { "$ref": "#/components/schemas/VeiculoResponse" } }
+        }
+      },
+      "ClienteCreatedResponse": {
+        "type": "object",
+        "properties": {
+          "cliente": { "$ref": "#/components/schemas/ClienteResponse" },
+          "leadId": { "type": "string", "format": "uuid", "nullable": true, "description": "null quando o perfil classificado não gera lead automático" },
+          "perfil": { "type": "string", "enum": ["fiel", "abandono", "esquecido", "economico"] },
+          "scoreRisco": { "type": "number", "format": "float" }
+        }
+      },
+      "LeadListItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "clienteId": { "type": "string", "format": "uuid" },
+          "veiculoId": { "type": "string", "format": "uuid" },
+          "nomeCliente": { "type": "string" },
+          "modeloVeiculo": { "type": "string", "example": "Ranger XLT" },
+          "scoreRisco": { "type": "number", "format": "float" },
+          "prioridade": { "type": "string", "enum": ["baixa", "media", "alta", "critica"] },
+          "status": { "type": "string", "enum": ["aberto", "agendado", "recusado", "sem-contato"] },
+          "criadoEm": { "type": "string", "format": "date-time" }
+        }
+      },
+      "LeadListResponse": {
+        "type": "object",
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/LeadListItem" } },
+          "page": { "type": "integer", "example": 1 },
+          "perPage": { "type": "integer", "example": 20 },
+          "total": { "type": "integer", "example": 137 }
+        }
+      },
+      "LeadDetail": {
+        "type": "object",
+        "description": "Visão 360 do lead — cliente + veículo + script comercial.",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "scoreRisco": { "type": "number", "format": "float" },
+          "prioridade": { "type": "string", "enum": ["baixa", "media", "alta", "critica"] },
+          "status": { "type": "string", "enum": ["aberto", "agendado", "recusado", "sem-contato"] },
+          "scriptOferta": { "type": "string" },
+          "observacao": { "type": "string", "nullable": true },
+          "criadoEm": { "type": "string", "format": "date-time" },
+          "atualizadoEm": { "type": "string", "format": "date-time" },
+          "cliente": { "$ref": "#/components/schemas/ClienteResponse" },
+          "veiculo": { "$ref": "#/components/schemas/VeiculoResponse" }
+        }
+      },
+      "LeadPatch": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "type": "string", "enum": ["aberto", "agendado", "recusado", "sem-contato"] },
+          "observacao": { "type": "string", "maxLength": 2000, "nullable": true }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["meta"],
+        "summary": "Health check (liveness/readiness)",
+        "security": [],
+        "responses": {
+          "200": { "description": "Serviço operacional", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HealthResponse" } } } },
+          "503": { "description": "Dependência degradada", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HealthResponse" } } } }
+        }
+      }
+    },
+    "/version": {
+      "get": {
+        "tags": ["meta"],
+        "summary": "Versão da API e build",
+        "security": [],
+        "responses": {
+          "200": { "description": "Metadata do serviço", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/VersionResponse" } } } }
+        }
+      }
+    },
+    "/v1/auth/login": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Autentica usuário e retorna JWT",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginRequest" } } }
+        },
+        "responses": {
+          "200": { "description": "JWT emitido", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginResponse" } } } },
+          "401": { "description": "Credenciais inválidas", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Erro" } } } },
+          "422": { "description": "Dados inválidos", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Erro" } } } }
+        }
+      }
+    },
+    "/v1/clientes": {
+      "post": {
+        "tags": ["clientes"],
+        "summary": "Cadastra cliente D0 da compra e dispara classificação",
+        "description": "Recebe os dados comerciais da compra. O backend persiste cliente+veículo, aciona o motor preditivo (MlService) e — se o perfil for de risco (Abandono/Esquecido) — gera um lead automaticamente com prioridade derivada do score.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ClienteCreateRequest" } } }
+        },
+        "responses": {
+          "201": { "description": "Cliente cadastrado e classificação concluída", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ClienteCreatedResponse" } } } },
+          "401": { "description": "Não autenticado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Erro" } } } },
+          "403": { "description": "Acesso negado (requer admin)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Erro" } } } },
+          "409": { "description": "Cliente ou VIN já cadastrado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Erro" } } } },
+          "422": { "description": "Dados inválidos", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Erro" } } } }
+        }
+      }
+    },
+    "/v1/leads": {
+      "get": {
+        "tags": ["leads"],
+        "summary": "Lista leads filtrados (consumido pelo app mobile)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "prioridade", "in": "query", "schema": { "type": "string", "enum": ["baixa", "media", "alta", "critica"] } },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["aberto", "agendado", "recusado", "sem-contato"] } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "minimum": 1, "default": 1 } },
+          { "name": "per_page", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 } }
+        ],
+        "responses": {
+          "200": { "description": "Lista paginada ordenada por prioridade (crítica → baixa) e score desc", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LeadListResponse" } } } },
+          "401": { "description": "Não autenticado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Erro" } } } },
+          "403": { "description": "Acesso negado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Erro" } } } }
+        }
+      }
+    },
+    "/v1/leads/{leadId}": {
+      "parameters": [
+        { "name": "leadId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+      ],
+      "get": {
+        "tags": ["leads"],
+        "summary": "Visão 360 do lead (cliente + veículo + script)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Lead detalhado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LeadDetail" } } } },
+          "401": { "description": "Não autenticado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Erro" } } } },
+          "403": { "description": "Acesso negado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Erro" } } } },
+          "404": { "description": "Lead não encontrado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Erro" } } } }
+        }
+      },
+      "patch": {
+        "tags": ["leads"],
+        "summary": "Atualiza status do lead (agendado/recusado/sem-contato)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LeadPatch" } } }
+        },
+        "responses": {
+          "200": { "description": "Lead atualizado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LeadDetail" } } } },
+          "401": { "description": "Não autenticado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Erro" } } } },
+          "403": { "description": "Acesso negado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Erro" } } } },
+          "404": { "description": "Lead não encontrado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Erro" } } } },
+          "422": { "description": "Status inválido", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Erro" } } } }
+        }
+      }
+    }
+  },
+  "security": [{ "bearerAuth": [] }]
+}
