@@ -1,14 +1,8 @@
 import Link from 'next/link';
 import { listLeads } from '@/lib/api';
 import { formatDate, formatPercent } from '@/lib/utils';
-import type { Perfil, Prioridade, StatusLead } from '@/types/api';
+import type { Prioridade, StatusLead } from '@/types/api';
 
-const PERFIL_COR: Record<Perfil, string> = {
-  FIEL: 'bg-blue-100 text-blue-800',
-  ABANDONO: 'bg-red-100 text-red-800',
-  ESQUECIDO: 'bg-amber-100 text-amber-800',
-  ECONOMICO: 'bg-teal-100 text-teal-800',
-};
 const PRIORIDADE_COR: Record<Prioridade, string> = {
   CRITICA: 'bg-red-600 text-white',
   ALTA: 'bg-orange-500 text-white',
@@ -24,12 +18,11 @@ const STATUS_COR: Record<StatusLead, string> = {
 
 const PRIORIDADES: Prioridade[] = ['CRITICA', 'ALTA', 'MEDIA', 'BAIXA'];
 const STATUSES: StatusLead[] = ['aberto', 'agendado', 'recusado', 'sem-contato'];
-const PERFIS: Perfil[] = ['FIEL', 'ABANDONO', 'ESQUECIDO', 'ECONOMICO'];
 
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: { prioridade?: string; status?: string; perfil?: string; page?: string };
+  searchParams: { prioridade?: string; status?: string; page?: string };
 }) {
   const page = Number(searchParams.page ?? 1);
   const perPage = 25;
@@ -39,7 +32,6 @@ export default async function LeadsPage({
     result = await listLeads({
       status: searchParams.status,
       prioridade: searchParams.prioridade,
-      perfil: searchParams.perfil,
       page,
       perPage,
     });
@@ -70,7 +62,6 @@ export default async function LeadsPage({
           <form className="flex flex-wrap items-end gap-4 text-sm">
             <FiltroSelect name="status" label="Status" valor={searchParams.status} opcoes={STATUSES} />
             <FiltroSelect name="prioridade" label="Prioridade" valor={searchParams.prioridade} opcoes={PRIORIDADES} />
-            <FiltroSelect name="perfil" label="Perfil" valor={searchParams.perfil} opcoes={PERFIS} />
             <div className="flex gap-2">
               <button type="submit" className="btn-primary">Filtrar</button>
               <Link href="/leads" className="btn-secondary">Limpar</Link>
@@ -84,7 +75,6 @@ export default async function LeadsPage({
               <tr>
                 <th className="px-6 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Cliente</th>
                 <th className="px-6 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Veículo</th>
-                <th className="px-6 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Perfil</th>
                 <th className="px-6 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Prioridade</th>
                 <th className="px-6 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Score</th>
                 <th className="px-6 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Status</th>
@@ -95,23 +85,15 @@ export default async function LeadsPage({
             <tbody className="divide-y divide-slate-100 bg-white">
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-16 text-center text-sm text-slate-400">
+                  <td colSpan={7} className="py-16 text-center text-sm text-slate-400">
                     Nenhum lead encontrado para os filtros atuais.
                   </td>
                 </tr>
               ) : (
                 items.map((lead) => (
                   <tr key={lead.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4 font-semibold text-slate-900">{lead.cliente.nome}</td>
-                    <td className="px-6 py-4 text-slate-700">
-                      {lead.veiculo.modelo}
-                      <span className="text-slate-400"> {lead.veiculo.ano}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${PERFIL_COR[(lead.cliente.perfil ?? 'ESQUECIDO') as Perfil]}`}>
-                        {lead.cliente.perfil ?? '—'}
-                      </span>
-                    </td>
+                    <td className="px-6 py-4 font-semibold text-slate-900">{lead.nomeCliente}</td>
+                    <td className="px-6 py-4 text-slate-700">{lead.modeloVeiculo}</td>
                     <td className="px-6 py-4">
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${PRIORIDADE_COR[lead.prioridade]}`}>
                         {lead.prioridade}

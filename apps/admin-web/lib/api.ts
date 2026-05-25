@@ -1,5 +1,5 @@
 import { getSession } from '@/lib/auth';
-import type { Lead, LeadListPage, LeadPatchRequest, LoginRequest, LoginResponse } from '@/types/api';
+import type { LeadDetail, LeadListPage, LeadPatchRequest, LoginRequest, LoginResponse } from '@/types/api';
 
 const INTERNAL_BASE = process.env.INTERNAL_GATEWAY_URL ?? 'http://gateway:8000';
 
@@ -51,7 +51,6 @@ export async function login(payload: LoginRequest): Promise<LoginResponse> {
 export interface LeadsQuery {
   status?: string;
   prioridade?: string;
-  perfil?: string;
   page?: number;
   perPage?: number;
 }
@@ -60,18 +59,17 @@ export async function listLeads(query: LeadsQuery = {}): Promise<LeadListPage> {
   const params = new URLSearchParams();
   if (query.status) params.set('status', query.status);
   if (query.prioridade) params.set('prioridade', query.prioridade);
-  if (query.perfil) params.set('perfil', query.perfil);
   params.set('page', String(query.page ?? 1));
   params.set('per_page', String(query.perPage ?? 50));
   return request<LeadListPage>(`/v1/leads?${params.toString()}`);
 }
 
-export async function getLead(id: string): Promise<Lead> {
-  return request<Lead>(`/v1/leads/${encodeURIComponent(id)}`);
+export async function getLead(id: string): Promise<LeadDetail> {
+  return request<LeadDetail>(`/v1/leads/${encodeURIComponent(id)}`);
 }
 
-export async function patchLead(id: string, payload: LeadPatchRequest): Promise<Lead> {
-  return request<Lead>(`/v1/leads/${encodeURIComponent(id)}`, {
+export async function patchLead(id: string, payload: LeadPatchRequest): Promise<LeadDetail> {
+  return request<LeadDetail>(`/v1/leads/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

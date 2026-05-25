@@ -66,7 +66,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
               <dt className="text-slate-500">Nome</dt>
               <dd className="col-span-2 text-slate-800">{lead.cliente.nome}</dd>
               <dt className="text-slate-500">CPF</dt>
-              <dd className="col-span-2 font-mono text-slate-800">{lead.cliente.cpfMascarado}</dd>
+              <dd className="col-span-2 font-mono text-slate-800">{lead.cliente.cpf}</dd>
               <dt className="text-slate-500">Email</dt>
               <dd className="col-span-2 text-slate-800">{lead.cliente.email ?? '—'}</dd>
               <dt className="text-slate-500">Telefone</dt>

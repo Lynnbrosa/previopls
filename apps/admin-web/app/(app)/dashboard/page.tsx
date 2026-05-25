@@ -2,15 +2,10 @@ import Link from 'next/link';
 import { PerfilPie } from '@/components/perfil-pie';
 import { listLeads } from '@/lib/api';
 import { formatPercent } from '@/lib/utils';
-import type { Lead, Perfil, Prioridade } from '@/types/api';
+import type { LeadListItem, Prioridade } from '@/types/api';
 
-const PERFIS: Perfil[] = ['FIEL', 'ABANDONO', 'ESQUECIDO', 'ECONOMICO'];
-const PERFIL_COR: Record<Perfil, string> = {
-  FIEL: 'bg-blue-100 text-blue-800',
-  ABANDONO: 'bg-red-100 text-red-800',
-  ESQUECIDO: 'bg-amber-100 text-amber-800',
-  ECONOMICO: 'bg-teal-100 text-teal-800',
-};
+const PRIORIDADES: Prioridade[] = ['CRITICA', 'ALTA', 'MEDIA', 'BAIXA'];
+
 const PRIORIDADE_COR: Record<Prioridade, string> = {
   CRITICA: 'bg-red-600 text-white',
   ALTA: 'bg-orange-500 text-white',
@@ -21,24 +16,23 @@ const PRIORIDADE_COR: Record<Prioridade, string> = {
 interface DashboardStats {
   totalLeads: number;
   abertos: number;
-  porPerfil: Record<string, number>;
-  criticos: Lead[];
+  porPrioridade: Record<Prioridade, number>;
+  criticos: LeadListItem[];
 }
 
 async function loadStats(): Promise<DashboardStats> {
   const page = await listLeads({ perPage: 100 });
   const items = page.items ?? [];
-  const porPerfil: Record<string, number> = { FIEL: 0, ABANDONO: 0, ESQUECIDO: 0, ECONOMICO: 0 };
+  const porPrioridade: Record<Prioridade, number> = { CRITICA: 0, ALTA: 0, MEDIA: 0, BAIXA: 0 };
   for (const lead of items) {
-    const perfil = lead.cliente.perfil ?? 'ESQUECIDO';
-    porPerfil[perfil] = (porPerfil[perfil] ?? 0) + 1;
+    porPrioridade[lead.prioridade] = (porPrioridade[lead.prioridade] ?? 0) + 1;
   }
   const criticos = items
     .filter((l) => l.prioridade === 'CRITICA' && l.status === 'aberto')
     .sort((a, b) => b.scoreRisco - a.scoreRisco)
     .slice(0, 8);
   const abertos = items.filter((l) => l.status === 'aberto').length;
-  return { totalLeads: items.length, abertos, porPerfil, criticos };
+  return { totalLeads: page.total ?? items.length, abertos, porPrioridade, criticos };
 }
 
 export default async function DashboardPage() {
@@ -55,7 +49,10 @@ export default async function DashboardPage() {
     );
   }
 
-  const pieData = PERFIS.map((perfil) => ({ perfil, count: stats.porPerfil[perfil] ?? 0 }));
+  const pieData = PRIORIDADES.map((prioridade) => ({
+    perfil: prioridade,
+    count: stats.porPrioridade[prioridade] ?? 0,
+  }));
 
   return (
     <div className="space-y-10">
@@ -90,14 +87,14 @@ export default async function DashboardPage() {
       <section className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <div className="card lg:col-span-2">
           <div className="card-header">
-            <p className="eyebrow">Distribuição por perfil</p>
+            <p className="eyebrow">Distribuição por prioridade</p>
           </div>
           <div className="card-body">
             <PerfilPie data={pieData} />
             <ul className="mt-6 space-y-3 text-sm">
               {pieData.map((row) => (
                 <li key={row.perfil} className="flex items-center justify-between">
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${PERFIL_COR[row.perfil as Perfil]}`}>
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${PRIORIDADE_COR[row.perfil as Prioridade]}`}>
                     {row.perfil}
                   </span>
                   <span className="font-semibold text-slate-800">{row.count}</span>
@@ -128,17 +125,12 @@ export default async function DashboardPage() {
                       className="flex items-center justify-between gap-4 py-4 transition hover:bg-slate-50 -mx-2 px-2 rounded-sm"
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-slate-900">{lead.cliente.nome}</p>
+                        <p className="truncate text-sm font-semibold text-slate-900">{lead.nomeCliente}</p>
                         <p className="mt-0.5 truncate text-xs text-slate-500">
-                          {lead.veiculo.modelo} {lead.veiculo.versao} · {lead.veiculo.concessionariaId}
+                          {lead.modeloVeiculo}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 whitespace-nowrap">
-                        <span
-                          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${PERFIL_COR[(lead.cliente.perfil ?? 'ESQUECIDO') as Perfil]}`}
-                        >
-                          {lead.cliente.perfil ?? 'N/A'}
-                        </span>
                         <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${PRIORIDADE_COR[lead.prioridade]}`}>
                           {lead.prioridade}
                         </span>

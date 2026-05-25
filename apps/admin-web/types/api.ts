@@ -21,12 +21,14 @@ export interface LoginResponse {
 export interface Cliente {
   id: string;
   nome: string;
-  cpfMascarado: string;
-  email: string;
-  telefone: string;
+  cpf: string;
+  email: string | null;
+  telefone: string | null;
   regiao: string;
   perfil: Perfil | null;
   scoreRisco: number | null;
+  criadoEm: string;
+  classificadoEm: string | null;
 }
 
 export interface Veiculo {
@@ -40,10 +42,20 @@ export interface Veiculo {
   concessionariaId: string;
 }
 
-export interface Lead {
+export interface LeadListItem {
   id: string;
-  cliente: Cliente;
-  veiculo: Veiculo;
+  clienteId: string;
+  veiculoId: string;
+  nomeCliente: string;
+  modeloVeiculo: string;
+  scoreRisco: number;
+  prioridade: Prioridade;
+  status: StatusLead;
+  criadoEm: string;
+}
+
+export interface LeadDetail {
+  id: string;
   scoreRisco: number;
   prioridade: Prioridade;
   status: StatusLead;
@@ -51,10 +63,12 @@ export interface Lead {
   observacao: string | null;
   criadoEm: string;
   atualizadoEm: string;
+  cliente: Cliente;
+  veiculo: Veiculo;
 }
 
 export interface LeadListPage {
-  items: Lead[];
+  items: LeadListItem[];
   page: number;
   perPage: number;
   total: number;
