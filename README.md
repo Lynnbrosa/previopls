@@ -103,12 +103,3 @@ previopls/
 ```
 
 Cada serviço mantém seu próprio README com setup detalhado, variáveis de ambiente e fluxo de uso. Os 4 repositórios originais da challenge ficam congelados em avaliação acadêmica. Este monorepo é a versão de produto.
-
-## Time
-
-Challenge Ford FIAP 2026, turma 2TDSPM.
-
-- Giovanne Charelli Zaniboni Silva
-- Leonardo Pasquini Baldaia
-- Gustavo Oliveira de Moura
-- Lynn Bueno Rosa

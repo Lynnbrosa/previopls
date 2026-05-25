@@ -42,9 +42,9 @@ def consult(
     principal: Principal = Depends(requires_role(Role.ADMIN, Role.ANALISTA)),
 ) -> LlmResponse:
     """
-    Stub: em produção, encaminha para o provedor de LLM contratado (Anthropic
-    Claude / OpenAI / AWS Bedrock — decisão de procurement) com o contexto
-    do lead, e retorna sugestão de abordagem comercial customizada.
+    Stub: em produção, encaminha para o provedor de LLM contratado (OpenAI /
+    AWS Bedrock / Vertex AI, decisão de procurement) com o contexto do lead,
+    e retorna sugestão de abordagem comercial customizada.
     """
     return LlmResponse(
         response=f"[STUB] Sugestão de abordagem para: {payload.prompt[:80]}...",
