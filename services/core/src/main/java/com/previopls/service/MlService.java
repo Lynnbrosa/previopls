@@ -1,27 +1,42 @@
 package com.previopls.service;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.previopls.entity.enums.PerfilCliente;
 import com.previopls.entity.enums.PrioridadeLead;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * Motor preditivo — stub determinístico para integração end-to-end.
+ * Motor preditivo: chama o serviço ml-api via REST interno.
  *
- * Na versão final, este serviço chamará o modelo serializado treinado
- * pela equipe de IA/ML (Base 2). Regra crítica de produto (US02):
- * apenas variáveis disponíveis no momento da compra (D0) entram no input.
+ * Contrato: POST {ML_API_URL}/predict
+ *   body  -> {regiao, modelo, ano, valor_compra, concessionaria_id}
+ *   resp  -> {perfil, score, latency_ms}
+ *
+ * Regra crítica de produto (US02): só features D0 entram no input.
+ *
+ * Fallback: indisponibilidade do ml-api não derruba o cadastro do cliente.
+ * O serviço devolve perfil ESQUECIDO com score 0.5 e loga warning, deixando
+ * a trilha de auditoria evidenciar a degradação para o time de operações.
  */
 @Service
 public class MlService {
+
+    private static final Logger log = LoggerFactory.getLogger(MlService.class);
 
     public static final Set<PerfilCliente> PERFIS_GERAM_LEAD =
             Set.of(PerfilCliente.ABANDONO, PerfilCliente.ESQUECIDO);
@@ -39,31 +54,53 @@ public class MlService {
                 "Cliente sensível a preço — apresentar oferta promocional com parcelamento e comparativo de custo total de propriedade.");
     }
 
+    private static final Duration CLIENT_TIMEOUT = Duration.ofSeconds(2);
+
+    private final RestClient restClient;
+
+    public MlService(@Value("${ML_API_URL:http://ml-api:8000}") String mlApiUrl) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout((int) CLIENT_TIMEOUT.toMillis());
+        factory.setReadTimeout((int) CLIENT_TIMEOUT.toMillis());
+
+        this.restClient = RestClient.builder()
+                .baseUrl(mlApiUrl)
+                .requestFactory(factory)
+                .build();
+    }
+
     public ResultadoClassificacao classificar(FeaturesCompra features) {
-        String seed = features.concessionariaId() + "|" + features.modelo() + "|"
-                + features.versao() + "|" + features.regiao();
-        byte[] digest = sha256(seed);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("regiao", features.regiao());
+        body.put("modelo", features.modelo());
+        body.put("ano", features.ano());
+        body.put("valor_compra", features.valorCompra() != null
+                ? features.valorCompra().toPlainString() : "0");
+        body.put("concessionaria_id", features.concessionariaId());
 
-        int bucket = Byte.toUnsignedInt(digest[0]) % 100;
-        double scoreBase = Byte.toUnsignedInt(digest[1]) / 255.0;
+        try {
+            PredictResponse response = restClient.post()
+                    .uri("/predict")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve()
+                    .body(PredictResponse.class);
 
-        PerfilCliente perfil;
-        double score;
-        if (bucket < 35) {
-            perfil = PerfilCliente.FIEL;
-            score = round(0.10 + scoreBase * 0.20);
-        } else if (bucket < 60) {
-            perfil = PerfilCliente.ECONOMICO;
-            score = round(0.30 + scoreBase * 0.25);
-        } else if (bucket < 85) {
-            perfil = PerfilCliente.ESQUECIDO;
-            score = round(0.55 + scoreBase * 0.20);
-        } else {
-            perfil = PerfilCliente.ABANDONO;
-            score = round(0.78 + scoreBase * 0.22);
+            if (response == null || response.perfil() == null || response.score() == null) {
+                log.warn("ml-api retornou resposta incompleta, aplicando fallback");
+                return fallback();
+            }
+
+            PerfilCliente perfil = PerfilCliente.valueOf(response.perfil());
+            return new ResultadoClassificacao(perfil, response.score(), Instant.now());
+
+        } catch (IllegalArgumentException unknownPerfil) {
+            log.warn("ml-api retornou perfil desconhecido, aplicando fallback", unknownPerfil);
+            return fallback();
+        } catch (Exception remoteError) {
+            log.warn("falha ao chamar ml-api ({}), aplicando fallback", remoteError.getMessage());
+            return fallback();
         }
-
-        return new ResultadoClassificacao(perfil, score, Instant.now());
     }
 
     public PrioridadeLead derivarPrioridade(double score) {
@@ -77,17 +114,8 @@ public class MlService {
         return SCRIPTS.get(perfil);
     }
 
-    private static byte[] sha256(String input) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            return md.digest(input.getBytes(StandardCharsets.UTF_8));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 indisponível", e);
-        }
-    }
-
-    private static double round(double value) {
-        return Math.round(value * 1000.0) / 1000.0;
+    private ResultadoClassificacao fallback() {
+        return new ResultadoClassificacao(PerfilCliente.ESQUECIDO, 0.5, Instant.now());
     }
 
     public record FeaturesCompra(
@@ -104,6 +132,14 @@ public class MlService {
             PerfilCliente perfil,
             Double scoreRisco,
             Instant classificadoEm
+    ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record PredictResponse(
+            String perfil,
+            Double score,
+            @JsonProperty("latency_ms") Integer latencyMs
     ) {
     }
 }
