@@ -1,0 +1,88 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Java / Spring
+target/
+build/
+*.class
+*.jar
+*.war
+*.ear
+.mvn/wrapper/maven-wrapper.jar
+.gradle/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+venv/
+.venv/
+env/
+ENV/
+*.egg-info/
+dist/
+*.egg
+
+# Node / React Native / Next.js
+node_modules/
+.next/
+out/
+.expo/
+.expo-shared/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Docker
+*.pid
+
+# Datasets pesados (não comitar)
+*.xlsx
+*.xls
+*.csv
+*.parquet
+!docs/**/*.csv
+data/raw/
+data/processed/
+vin_share_Desafio_02.xlsx
+Online_Retail.xlsx
+
+# Notebooks runtime
+.ipynb_checkpoints/
+
+# Secrets
+*.pem
+*.key
+secrets/
+!docs/**/*.pem.example
+
+# Coverage / reports
+coverage/
+.nyc_output/
