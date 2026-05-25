@@ -26,7 +26,7 @@ interface DashboardStats {
 }
 
 async function loadStats(): Promise<DashboardStats> {
-  const page = await listLeads({ perPage: 200 });
+  const page = await listLeads({ perPage: 100 });
   const items = page.items ?? [];
   const porPerfil: Record<string, number> = { FIEL: 0, ABANDONO: 0, ESQUECIDO: 0, ECONOMICO: 0 };
   for (const lead of items) {
