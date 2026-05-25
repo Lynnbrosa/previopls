@@ -74,7 +74,7 @@ POST /predict
   resp  → {perfil, score, latency_ms}
 ```
 
-Apenas 5 features D0 entram no input. O pipeline carregado é validado no boot do ml-api: feature names cruzadas contra uma lista de tokens banidos (`recency`, `frequency`, `monetary`, `tenure`, `r_`, `f_`, `m_`). Se algum aparecer, o boot lança erro e o container morre. As classes emitidas são validadas contra o contrato `{FIEL, ABANDONO, ESQUECIDO, ECONOMICO}` pela mesma razão. Não há janela operacional em que um modelo com leak possa servir requests.
+Apenas 5 features D0 entram no input. O pipeline carregado é validado no boot do ml-api: feature names cruzadas contra uma lista de tokens banidos como substring (`recency`, `frequency`, `monetary`, `tenure`) e contra os prefixos RFM (`r_`, `f_`, `m_`). Se algum aparecer, o boot lança erro e o container morre. As classes emitidas são validadas contra o contrato `{FIEL, ABANDONO, ESQUECIDO, ECONOMICO}` pela mesma razão. Não há janela operacional em que um modelo com leak possa servir requests.
 
 O notebook em [`services/ml/notebook/`](../services/ml/notebook/) trabalha em duas frentes metodológicas. A primeira faz segmentação não-supervisionada com RFM completo (Recency, Frequency, Monetary), AOV, UniqueProducts e Tenure, comparando K-Means, DBSCAN e Hierarchical. K-Means é escolhido por cobertura total, silhouette competitivo e reprodutibilidade em produção. Os clusters resultantes são mapeados aos 4 perfis Ford via heurísticas explícitas sobre as medianas R/F/M/AOV, nunca como "Cluster 0/1/2".
 

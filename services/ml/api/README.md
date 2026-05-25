@@ -41,7 +41,7 @@ Outros endpoints úteis:
 
 ## Validação anti-leakage no boot
 
-O `load_model` em [`app/predictor.py`](app/predictor.py) verifica que o `feature_names_in_` do pipeline carregado não contém nenhum dos tokens banidos: `recency`, `frequency`, `monetary`, `tenure`, `r_`, `f_`, `m_`. Se aparecer, o boot lança `RuntimeError` e o container morre. Também valida que `classes_` está dentro do contrato `{FIEL, ABANDONO, ESQUECIDO, ECONOMICO}`.
+O `load_model` em [`app/predictor.py`](app/predictor.py) verifica que o `feature_names_in_` do pipeline carregado não contém nenhum dos tokens banidos `recency`, `frequency`, `monetary`, `tenure` como substring, nem começa com os prefixos RFM `r_`, `f_`, `m_`. Se aparecer, o boot lança `RuntimeError` e o container morre. Também valida que `classes_` está dentro do contrato `{FIEL, ABANDONO, ESQUECIDO, ECONOMICO}`.
 
 Essa é a contraparte server-side da Seção 14 do notebook, ver [`services/ml/notebook/previoPLS_ml.ipynb`](../notebook/previoPLS_ml.ipynb).
 

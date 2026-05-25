@@ -16,7 +16,8 @@ from app.logging import get_logger
 
 log = get_logger("ml-api.predictor")
 
-BANNED_TOKENS = ("recency", "frequency", "monetary", "tenure", "r_", "f_", "m_")
+BANNED_TOKENS = ("recency", "frequency", "monetary", "tenure")
+BANNED_PREFIXES = ("r_", "f_", "m_")
 
 ALLOWED_PERFIS = ("FIEL", "ABANDONO", "ESQUECIDO", "ECONOMICO")
 DEFAULT_MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "ml_model.pkl"
@@ -38,7 +39,12 @@ def _model_version(path: Path) -> str:
 
 
 def _check_anti_leakage(feature_names: tuple[str, ...]) -> None:
-    leaked = [name for name in feature_names if any(tok in name.lower() for tok in BANNED_TOKENS)]
+    leaked = [
+        name
+        for name in feature_names
+        if any(tok in name.lower() for tok in BANNED_TOKENS)
+        or any(name.lower().startswith(prefix) for prefix in BANNED_PREFIXES)
+    ]
     if leaked:
         raise RuntimeError(
             "Pipeline carrega features pós-venda banidas pela US02: " + ", ".join(leaked)
