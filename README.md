@@ -80,7 +80,6 @@ previopls/
 ├── README.md
 ├── ARCHITECTURE.md
 ├── BUSINESS_CASE.md
-├── CLAUDE.md
 ├── docs/
 │   ├── pulse-deck.pdf
 │   ├── whitepaper.md
