@@ -264,7 +264,7 @@ graph TB
     JVM -.->|notificação| FCM[FCM/APNs]
 ```
 
-O target de deploy do modelo TOGAF é AWS (EKS + ALB + RDS + S3). O alvo prático do piloto, descrito na seção 6, é Railway com a mesma topologia conceitual (containers gerenciados, banco gerenciado, serviços privados). A separação não muda o desenho lógico.
+O target de deploy do modelo TOGAF é AWS (EKS + ALB + RDS + S3). O alvo prático do piloto, descrito em [`infra/deploy/`](infra/deploy/), é Vercel para o admin-web, Render para os 3 backends e Neon para o Postgres. A topologia conceitual é a mesma (containers gerenciados, banco gerenciado, serviços privados); muda apenas o provedor. A separação não afeta o desenho lógico.
 
 ## 6. Registros de decisão arquitetural
 

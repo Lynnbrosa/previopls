@@ -45,7 +45,7 @@ A janela do ganho líquido inclui a primeira revisão e as duas seguintes, dado 
 
 | Componente                                       | Custo mensal       | Premissa                     |
 |--------------------------------------------------|---------------------|-------------------------------|
-| Infra cloud para piloto (Railway gerenciado)     | `<<TBD>>`           | 4 serviços + banco gerenciado |
+| Infra cloud para piloto (Vercel + Render + Neon)  | `<<TBD>>`           | 4 serviços + banco gerenciado, free tier no piloto inicial |
 | Infra cloud em produção em escala nacional       | `<<TBD>>`           | EKS + RDS + ALB + S3          |
 | Operação do modelo (retreino trimestral)         | `<<TBD>>`           | jornada do time de IA         |
 | Suporte operacional ao consultor                 | `<<TBD>>`           | suporte L1 + materiais        |

@@ -57,7 +57,7 @@ previopls/
 │   └── admin-web/               (novo Next.js)
 ├── infra/
 │   ├── docker-compose.yml
-│   └── railway/
+│   └── deploy/
 └── scripts/
     └── build-seed/
 ```
@@ -143,7 +143,7 @@ BUSINESS_CASE.md (esqueleto, não inventar números):
   - Mercado endereçável (Anfavea/Fenabrave) `<<TBD: vendas Ford Brasil 2024-2025>>`
   - Receita perdida estimada `<<TBD: ticket médio revisão Ford × % abandono>>`
   - Recuperação via PrevioPLS `<<TBD: % conversão piloto>>`
-  - Custo da plataforma `<<TBD: infra Railway/AWS>>`
+  - Custo da plataforma `<<TBD: infra Vercel + Render + Neon no piloto, AWS em produção>>`
   - Payback estimado `<<TBD>>`
 - Nota explícita no topo: documento em construção, números a preencher com dados públicos antes da próxima apresentação.
 
@@ -221,18 +221,25 @@ Commit: `feat(admin-web): Next.js dashboard for stakeholder demo`
 
 ### Fase 6: deploy config
 
-`infra/railway/` com 4 arquivos descritivos (markdown ou TOML, conforme convenção Railway atual):
+`infra/deploy/` com specs de provisionamento por provedor. Stack escolhida prioriza free tier sem cartão amarrado:
 
-- `core.md` build/run do Spring (Maven package + `java -jar`)
-- `gateway.md` build via Dockerfile (já existe)
-- `ml-api.md` build via Dockerfile (Fase 4)
-- `admin-web.md` build Next.js (`next build`, `next start`)
+- Vercel para o admin-web (Next.js).
+- Render para os 3 backends (gateway, core, ml-api) via Dockerfile.
+- Neon para o Postgres (3 GB free, 2 bases: `previopls_core` e `previopls_gateway`).
 
-Documentar no README raiz como o deploy é orquestrado: gateway no domínio raiz (`previopls.com.br`), admin-web em subdomínio (`app.previopls.com.br`), core e ml-api privados.
+Arquivos:
 
-Não executar deploy. Apenas documentar. Deploy real é manual pelo Lynn.
+- `vercel-admin-web.md`
+- `render-gateway.md`
+- `render-core.md`
+- `render-ml-api.md`
+- `neon-postgres.md`
 
-Commit: `chore(infra): railway deploy specs`
+Documentar no README raiz: gateway em `api.previopls.com.br`, admin-web em `app.previopls.com.br`, core e ml-api privados na rede da Render.
+
+Não executar deploy. Apenas documentar. Deploy real é manual.
+
+Commit: `chore(infra): deploy specs for vercel + render + neon`
 
 ### Fase 7: whitepaper
 
