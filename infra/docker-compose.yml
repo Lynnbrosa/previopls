@@ -121,9 +121,13 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: https://localhost
       NODE_ENV: production
-      INTERNAL_GATEWAY_URL: http://gateway:8000
+      # Ponto interno onde o admin-web busca dados. Para o demo unificado aponta
+      # ao Core, que traz o seed de usuários (DataSeeder) e os 300 clientes / 93
+      # leads do V3__seed_real_data.sql. Em produção isso passará a apontar ao
+      # Gateway uma vez que o proxy de borda esteja wired (ver ADR-001).
+      INTERNAL_GATEWAY_URL: http://core:5000
     depends_on:
-      gateway:
+      core:
         condition: service_healthy
     expose:
       - "3000"
