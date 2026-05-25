@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!--
+      Mascaramento de PII em todos os logs:
+        - CPF (11 dígitos isolados)
+        - email
+        - cabeçalho Authorization Bearer
+        - números longos (potenciais cartões / CNPJ)
+      Aplica-se a console e arquivo. Não há como acidentalmente vazar PII
+      via Logger.info("cpf={}", cpf) — o pattern intercepta antes da escrita.
+    -->
+
+    <conversionRule conversionWord="maskedMsg"
+                    converterClass="com.previopls.security.PiiMaskingConverter"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{requestId:-no-req}] %logger{36} - %maskedMsg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+                <timestamp/>
+                <logLevel/>
+                <loggerName/>
+                <mdc/>
+                <pattern>
+                    <pattern>{"requestId":"%X{requestId:-}","app":"previo-pls"}</pattern>
+                </pattern>
+                <message>
+                    <messageSplitRegex>maskedMsg</messageSplitRegex>
+                </message>
+                <stackTrace/>
+            </providers>
+        </encoder>
+    </appender>
+
+    <springProfile name="prod">
+        <root level="INFO">
+            <appender-ref ref="JSON"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="!prod">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+        <logger name="org.hibernate.SQL" level="WARN"/>
+        <logger name="org.springframework.security" level="WARN"/>
+    </springProfile>
+
+</configuration>

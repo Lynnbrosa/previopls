@@ -1,0 +1,150 @@
+name: previopls
+
+networks:
+  previopls:
+    driver: bridge
+
+volumes:
+  pgdata:
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: previopls-postgres
+    restart: unless-stopped
+    networks: [previopls]
+    environment:
+      POSTGRES_USER: previopls
+      POSTGRES_PASSWORD: previopls
+      POSTGRES_DB: previopls
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U previopls -d previopls"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ml-api:
+    build:
+      context: ../services/ml/api
+      dockerfile: Dockerfile
+    container_name: previopls-ml-api
+    restart: unless-stopped
+    networks: [previopls]
+    environment:
+      ML_MODEL_PATH: /app/models/ml_model.pkl
+      LOG_LEVEL: INFO
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)\""]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  core:
+    build:
+      context: ../services/core
+      dockerfile: ../../infra/core.Dockerfile
+    container_name: previopls-core
+    restart: unless-stopped
+    networks: [previopls]
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/previopls_core
+      DB_USERNAME: previopls
+      DB_PASSWORD: previopls
+      JWT_SECRET: dev-only-change-me-this-key-must-be-at-least-32-bytes-long
+      JWT_EXPIRATION_HOURS: "8"
+      APP_CRYPTO_KEY: cHJldmlvcGxzLWRldi1rZXktMzItYnl0ZXMtWFhYWFg=
+      ML_API_URL: http://ml-api:8000
+      CORS_ORIGINS: https://localhost,http://localhost:3000,http://localhost:8081,http://localhost:19006
+      LOCKOUT_MAX_ATTEMPTS: "5"
+      LOCKOUT_WINDOW_MINUTES: "15"
+      RATE_LIMIT_LOGIN: "5"
+      RATE_LIMIT_DEFAULT: "200"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ml-api:
+        condition: service_healthy
+    expose:
+      - "5000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:5000/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  gateway:
+    build:
+      context: ../services/gateway
+      dockerfile: Dockerfile
+    container_name: previopls-gateway
+    restart: unless-stopped
+    networks: [previopls]
+    environment:
+      APP_ENV: development
+      DATABASE_URL: postgresql+psycopg://previopls:previopls@postgres:5432/previopls_gateway
+      JWT_PRIVATE_KEY_PATH: /app/keys/jwt_private.pem
+      JWT_PUBLIC_KEY_PATH: /app/keys/jwt_public.pem
+      FERNET_KEY: ${FERNET_KEY:-bV9Wt8aLkV3jH2KqXoXBb1nDmYsP7vZbMHRR9G8u3jQ=}
+      CPF_HASH_PEPPER: ${CPF_HASH_PEPPER:-change-me-cpf-hash-pepper-min-32-bytes-long}
+      HMAC_PAYLOAD_SECRET: ${HMAC_PAYLOAD_SECRET:-change-me-hmac-payload-secret-min-32-bytes}
+      CORE_API_URL: http://core:5000
+      LOG_LEVEL: INFO
+    volumes:
+      - ../services/gateway/keys:/app/keys:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      core:
+        condition: service_healthy
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+  admin-web:
+    build:
+      context: ../apps/admin-web
+      dockerfile: Dockerfile
+    container_name: previopls-admin-web
+    restart: unless-stopped
+    networks: [previopls]
+    environment:
+      NEXT_PUBLIC_API_URL: https://localhost
+      NODE_ENV: production
+      # Ponto interno onde o admin-web busca dados. Para o demo unificado aponta
+      # ao Core, que traz o seed de usuários (DataSeeder) e os 300 clientes / 93
+      # leads do V3__seed_real_data.sql. Em produção isso passará a apontar ao
+      # Gateway uma vez que o proxy de borda esteja wired (ver ADR-001).
+      INTERNAL_GATEWAY_URL: http://core:5000
+    depends_on:
+      core:
+        condition: service_healthy
+    expose:
+      - "3000"
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: previopls-nginx
+    restart: unless-stopped
+    networks: [previopls]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../services/gateway/nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+      admin-web:
+        condition: service_started

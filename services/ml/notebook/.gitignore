@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Planilha Ford NÃO vai pro repo (82MB — fora do limite recomendado do GitHub).
+# Baixe localmente conforme instruções no README.
+data/vin_share_*.xlsx
