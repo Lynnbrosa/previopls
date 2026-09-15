@@ -27,11 +27,31 @@ As variáveis precisam estar no escopo **Production** (e Preview, se quiser test
 
 Em Settings → Git, confirme que a Production Branch é a branch padrão do repositório (`feat/monorepo-consolidation`). Um deploy de produção preso a uma branch antiga mantém o painel com o código anterior, em que qualquer erro de login aparecia como "Credenciais inválidas".
 
+Como conferir: no projeto da Vercel, **Deployments** → filtro *Environment: Production*. Se o último deploy de produção for antigo enquanto os pushes recentes aparecem só como *Preview*, a Production Branch aponta para outra branch (ou o projeto foi promovido à mão uma única vez). Corrija em Settings → Git → Production Branch e faça **Redeploy** do último commit, ou use **Promote to Production** no deploy de preview mais recente. Até lá, o código novo só existe nas URLs de preview (`previopls-admin-git-<branch>-<time>.vercel.app`), que por padrão pedem login na Vercel, e a URL de produção (`previopls-admin.vercel.app`) continua servindo o build antigo: dashboard com "Falha ao carregar dados do backend. Verifique se o serviço de domínio está respondendo na rede interna." para qualquer erro.
+
+As variáveis de ambiente valem por escopo: um preview só enxerga `INTERNAL_GATEWAY_URL` se ela também estiver marcada para *Preview*.
+
 ## Se o login mostrar erro
 
 - "Credenciais inválidas ou conta bloqueada temporariamente": o backend respondeu 401. Confira se o Gateway na Render tem usuários (`BOOTSTRAP_ADMIN_*` ou `SEED_DEFAULT_USERS=true`, ver [`render-gateway.md`](render-gateway.md)) e se não houve 5 tentativas erradas nos últimos 15 minutos.
-- "O backend demorou para responder": cold start do free tier da Render (30 a 60 s). A route de login espera até 60 s (`maxDuration`); tente de novo.
+- "O backend demorou para responder": cold start do free tier da Render (30 a 60 s). A route de login espera até 50 s dentro do `maxDuration` de 60 s; tente de novo.
 - "O servidor respondeu HTTP 504 sem detalhes": a função da Vercel foi cortada antes do backend acordar. Acorde o backend abrindo `<gateway>/health` e repita.
+
+## Se o dashboard mostrar "Backend indisponível"
+
+O card traz o erro da leitura (status e código do backend) e um diagnóstico da cadeia, medido pelo próprio servidor do painel no momento da falha:
+
+| Linha | O que mede | Se estiver "fora" ou "sem resposta" |
+|---|---|---|
+| Painel → Gateway | `GET <INTERNAL_GATEWAY_URL>/health` | URL errada ou variável não definida (o card avisa quando está usando o default `gateway:8000` do compose); Gateway suspenso no free tier (acorda em 30 a 60 s) |
+| Gateway → Banco | `components.database` do `/health` | `DATABASE_URL` do Gateway na Render / Neon fora |
+| Gateway → Core | `components.core` do `/health` | Core ainda acordando (1 a 2 min em JVM) ou `CORE_API_URL` errada |
+
+Códigos que aparecem na mensagem:
+
+- `503 CORE_UNAVAILABLE`: o Gateway não conseguiu falar com o Core. Transitório em free tier; o card tenta de novo a cada 20 s (até 15 vezes) e some sozinho quando o Core sobe.
+- `502 CORE_AUTH_MISMATCH`: o Core rejeitou o token interno do Gateway. `JWT_SECRET` precisa ser idêntico nos dois serviços da Render. Não é transitório: o card não insiste.
+- `HTTP 504` sem código: a função da Vercel foi cortada. As páginas declaram `maxDuration = 60`, o máximo do plano Hobby sem Fluid Compute; não aumente sem mudar de plano.
 
 ## Domínio público
 

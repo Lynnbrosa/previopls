@@ -123,6 +123,9 @@ curl -s -H "Authorization: Bearer $TOKEN" 'localhost:8001/v1/leads?status=aberto
 | Login correto responde 401 | 5 falhas nos últimos 15 min para aquele e-mail (lockout) ou 6+ logins no mesmo minuto pelo mesmo IP (429) | aguardar; o lockout expira sozinho |
 | Gateway em produção sem nenhum usuário | `SEED_DEFAULT_USERS` desligado e `BOOTSTRAP_ADMIN_*` não definidos | definir `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` ou `python -m app.db.seed` no shell do container |
 | `http://localhost:3000` ou `:5000` redireciona sozinho para https | HSTS gravado no navegador para `localhost` por uma versão antiga do nginx | remover `localhost` em `chrome://net-internals/#hsts` (Chrome) ou limpar dados do site (Firefox); a versão atual não envia HSTS para localhost |
+| Painel mostra "Backend indisponível" com **Gateway → Core: fora** | Core ainda subindo (JVM leva ~1 min) ou `CORE_API_URL` errada no Gateway | esperar: o card tenta de novo a cada 20 s; se persistir, `docker compose logs core` |
+| Painel mostra `502 CORE_AUTH_MISMATCH` | `JWT_SECRET` diferente entre `core` e `gateway` | igualar em `infra/.env` e `docker compose up -d core gateway` |
+| Painel mostra **Painel → Gateway: fora** com host `gateway:8000` fora do compose | `INTERNAL_GATEWAY_URL` não definida (Vercel, `npm run dev`) | definir a URL pública do Gateway no ambiente do admin-web |
 
 ## Deploy para piloto
 

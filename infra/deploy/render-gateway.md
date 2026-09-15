@@ -11,7 +11,7 @@ Edge de segurança LGPD do PrevioPLS. Único serviço Render exposto publicament
 5. **Runtime**: `Docker`. Dockerfile do próprio diretório.
 6. **Plan**: Free (suspende após 15 min de inatividade, acorda em 30 a 60 s no primeiro request).
 7. **Health Check Path**: `/health`.
-8. **Auto-Deploy**: `Yes` (apenas se o branch for `main`).
+8. **Branch**: `feat/monorepo-consolidation` (a branch padrão do repositório). **Auto-Deploy**: `Yes`.
 
 ## Variáveis de ambiente
 
@@ -20,6 +20,7 @@ Edge de segurança LGPD do PrevioPLS. Único serviço Render exposto publicament
 | `APP_ENV`               | `production` (desliga `/docs`, exige chaves RSA presentes, não cria usuários seed) |
 | `DATABASE_URL`          | `postgresql+psycopg://<user>:<pass>@<neon-host>/previopls_gateway?sslmode=require` (a string `postgresql://` copiada do Neon também é aceita) |
 | `CORE_API_URL`          | URL interna do core na Render (`https://previopls-core.onrender.com`) — ativa o modo proxy |
+| `CORE_WARMUP_SECONDS`   | `120` (default). No boot e a cada login o Gateway faz `GET /health` no core em segundo plano para acordá-lo; `0` desliga |
 | `JWT_SECRET`            | o mesmo segredo HS256 configurado no core (assina o JWT interno por requisição) |
 | `SEED_DEFAULT_USERS`    | `false` (`true` só em demo: cria admin@ford.com/admin123 etc.)       |
 | `BOOTSTRAP_ADMIN_EMAIL` | e-mail do primeiro administrador (criado no boot se não existir)      |
@@ -52,7 +53,7 @@ GATEWAY_USER_PASSWORD='senha-forte' python -m app.db.seed --email consultor@conc
 
 ## Health check
 
-O Dockerfile do gateway já define `HEALTHCHECK` (curl em `/health`). Render usa o mesmo path por configuração. O corpo reporta `components.database` e `components.core`.
+O Dockerfile do gateway já define `HEALTHCHECK` (curl em `/health`). Render usa o mesmo path por configuração. O corpo reporta `mode` (`core-proxy` ou `standalone`), `components.database` e `components.core`; o painel usa esse JSON no card de diagnóstico.
 
 ## Limitações do plano free
 
@@ -60,3 +61,4 @@ O Dockerfile do gateway já define `HEALTHCHECK` (curl em `/health`). Render usa
 - 750 horas-mês de runtime gratuito (suficiente se for o único serviço público).
 - 100 GB de bandwidth gratuito.
 - Não usar para produção continuada. Migre para Starter ($7/mês) para uptime contínuo.
+- O core (JVM) leva 1 a 2 min para acordar. Até lá as leituras respondem `503 CORE_UNAVAILABLE`; o gateway já pede para ele subir no login e o painel tenta de novo sozinho a cada 20 s.
