@@ -27,7 +27,8 @@ export function LeadActions({ leadId, currentStatus }: { leadId: string; current
         body: JSON.stringify({ status, observacao: observacao || undefined }),
       });
       if (!res.ok) {
-        setError('Falha ao atualizar lead');
+        const body = await res.json().catch(() => null);
+        setError(body?.message ?? `Falha ao atualizar lead (HTTP ${res.status}).`);
         setPending(null);
         return;
       }

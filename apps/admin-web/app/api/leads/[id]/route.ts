@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
-import { ApiError, patchLead } from '@/lib/api';
+import { ApiError, forwardingHeaders, patchLead } from '@/lib/api';
+
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   let body: { status?: string; observacao?: string };
@@ -12,15 +15,23 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     return NextResponse.json({ message: 'Status obrigatório' }, { status: 422 });
   }
   try {
-    const lead = await patchLead(params.id, {
-      status: body.status as never,
-      observacao: body.observacao,
-    });
+    const lead = await patchLead(
+      params.id,
+      { status: body.status as never, observacao: body.observacao },
+      forwardingHeaders(request),
+    );
     return NextResponse.json(lead);
   } catch (err) {
     if (err instanceof ApiError) {
-      return NextResponse.json({ message: 'Falha ao atualizar lead' }, { status: err.status });
+      const message =
+        err.status === 401 ? 'Sessão expirada. Entre novamente.'
+        : err.status === 403 ? 'Seu papel não pode alterar leads.'
+        : err.status === 404 ? 'Lead não encontrado.'
+        : err.status === 429 ? 'Muitas requisições. Aguarde um instante.'
+        : err.status >= 500 ? 'Backend indisponível no momento.'
+        : 'Falha ao atualizar lead.';
+      return NextResponse.json({ message }, { status: err.status });
     }
-    return NextResponse.json({ message: 'Erro inesperado' }, { status: 500 });
+    return NextResponse.json({ message: 'Não foi possível conectar ao backend.' }, { status: 503 });
   }
 }

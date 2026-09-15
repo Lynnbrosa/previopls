@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { setSessionCookies } from '@/lib/auth';
-import { ApiError, login } from '@/lib/api';
+import { ApiError, forwardingHeaders, login } from '@/lib/api';
+
+// Backends em free tier (Render) acordam em 30 a 60 s. Sem isso a função da Vercel
+// morre em 10 s com 504 sem corpo JSON e o formulário não consegue explicar o erro.
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   let body: { email?: string; senha?: string };
@@ -13,7 +18,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: 'Email e senha obrigatórios' }, { status: 422 });
   }
   try {
-    const response = await login({ email: body.email, senha: body.senha });
+    const response = await login({ email: body.email, senha: body.senha }, forwardingHeaders(request));
     setSessionCookies(response.accessToken, response.role, response.expiresIn);
     return NextResponse.json({ role: response.role });
   } catch (err) {
@@ -30,6 +35,14 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ message: 'Falha ao autenticar.' }, { status: err.status });
     }
-    return NextResponse.json({ message: 'Não foi possível conectar ao backend.' }, { status: 503 });
+    const timedOut = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
+    return NextResponse.json(
+      {
+        message: timedOut
+          ? 'O backend demorou para responder (pode estar acordando). Tente novamente em alguns segundos.'
+          : 'Não foi possível conectar ao backend.',
+      },
+      { status: 503 },
+    );
   }
 }
