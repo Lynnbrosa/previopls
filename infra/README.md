@@ -17,7 +17,9 @@ Não há passos manuais. No primeiro boot:
 
 Para trocar os segredos de desenvolvimento: `cp infra/.env.example infra/.env` e edite. Os defaults do compose bastam para a demo local; nunca use-os fora da sua máquina.
 
-Portas no host: `80` e `443` (nginx) e `127.0.0.1:5000` (Core, apenas para o app mobile em dev; remova `ports` do serviço `core` se não precisar). Os demais serviços ficam restritos à rede interna `previopls`.
+Portas no host: `80` e `443` (nginx) e `127.0.0.1:5000` (Core, apenas para o app mobile em dev; `CORE_HOST_PORT` troca a porta, útil no macOS onde a 5000 é do AirPlay Receiver; remova `ports` do serviço `core` se não precisar). Os demais serviços ficam restritos à rede interna `previopls`.
+
+Erros gerados pelo próprio nginx em `/api/*` (429 do rate limit, 502/503/504 com upstream fora) saem em JSON no contrato `{error:{code,message}}`. O header HSTS só é enviado para hosts diferentes de `localhost`/`127.*`, para não forçar HTTPS em outros servidores locais durante o desenvolvimento.
 
 ## Rotas no nginx
 
@@ -61,8 +63,8 @@ O `depends_on` com `condition` garante a ordem:
 2. `ml-api` (espera 200 em `/health`).
 3. `core` (após postgres + ml-api; `start_period` de 40 s para a JVM).
 4. `gateway` (após postgres + core; `/health` só fica `ok` com banco e core `up`).
-5. `admin-web` (após gateway saudável).
-6. `nginx` (após certgen, gateway e admin-web).
+5. `admin-web` (após gateway saudável; healthcheck em `/login`).
+6. `nginx` (após certgen, gateway e admin-web saudáveis).
 
 ## Dockerfiles
 

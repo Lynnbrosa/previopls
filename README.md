@@ -46,7 +46,7 @@ Pré-requisitos: Docker e Docker Compose v2. Nenhum passo manual de chaves ou ce
 docker compose -f infra/docker-compose.yml up --build
 ```
 
-A stack sobe nesta ordem (com healthchecks): PostgreSQL, certgen (certificado TLS self-signed, uma vez), ml-api, Core, Gateway, Admin Web, nginx. No primeiro boot o Core aplica o Flyway (schema + seed de 300 clientes / 93 leads) e o Gateway aplica o Alembic, gera o par RSA de desenvolvimento e cria os usuários padrão. O nginx expõe as portas 80 e 443; o Core fica em `127.0.0.1:5000` apenas para o app mobile em dev; todo o resto roda na rede interna `previopls`.
+A stack sobe nesta ordem (com healthchecks): PostgreSQL, certgen (certificado TLS self-signed, uma vez), ml-api, Core, Gateway, Admin Web, nginx. No primeiro boot o Core aplica o Flyway (schema + seed de 300 clientes / 93 leads) e o Gateway aplica o Alembic, gera o par RSA de desenvolvimento e cria os usuários padrão. O nginx expõe as portas 80 e 443; o Core fica em `127.0.0.1:5000` apenas para o app mobile em dev (`CORE_HOST_PORT=5001` no `infra/.env` se a 5000 estiver ocupada, como no macOS com AirPlay); todo o resto roda na rede interna `previopls`.
 
 Acessos:
 
