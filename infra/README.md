@@ -26,7 +26,10 @@ Portas no host: `80` e `443` (nginx) e `127.0.0.1:5000` (Core, apenas para o app
 | `https://localhost/api/v1/*`     | Gateway FastAPI (remove o `/api`)   | `/api/v1/auth/login` limitado a 5 req/min |
 | `https://localhost/api/health`   | Gateway `/health`                   | reporta `database` e `core`              |
 | `https://localhost/api/docs`     | Gateway `/docs` (Swagger)           | apenas em dev (`APP_ENV != production`)  |
+| `https://localhost/api/*` (demais) | Admin Web Next.js                 | route handlers da sessão do painel: `/api/auth/login`, `/api/auth/logout`, `/api/leads/{id}` |
 | `https://localhost/*`            | Admin Web Next.js                   |                                          |
+
+Só o que está sob `/api/v1/` (mais `/api/health`, `/api/docs`, `/api/openapi.json`) vai para o Gateway. As outras rotas `/api/*` são do próprio Next.js: o navegador fala com o painel, e o painel fala com o Gateway pela rede interna. Um `location /api/` genérico apontando para o Gateway faz o login do painel responder 404 e o formulário mostrar "Credenciais inválidas".
 
 O admin-web fala com o Gateway pela rede interna (`INTERNAL_GATEWAY_URL=http://gateway:8000`). O Gateway autentica (JWT RS256) e repassa ao Core com um JWT interno HS256 (ADR-001/ADR-003). O app mobile do consultor conecta direto no Core via `EXPO_PUBLIC_API_URL` (ver [`apps/consultor-mobile/README.md`](../apps/consultor-mobile/README.md)).
 
@@ -44,6 +47,7 @@ A separação física por database evita colisão de nomes de tabelas e permite 
 | Variável              | Quem usa            | Para quê                                                        |
 |-----------------------|---------------------|-----------------------------------------------------------------|
 | `JWT_SECRET`          | core, gateway       | HS256: o Core valida os tokens que ele mesmo emite e os tokens internos que o Gateway assina por requisição |
+| `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_PASSWORD` | gateway | primeiro administrador em produção (em dev o seed de demo já cria `admin@ford.com`) |
 | `APP_CRYPTO_KEY`      | core, build_seed.py | AES-256-GCM da PII em repouso. O seed `V3` foi cifrado com a chave dev; ao trocar, regenere o seed |
 | `HMAC_PAYLOAD_SECRET` | gateway, faturamento| assinatura `X-Signature` do `POST /api/v1/clientes`             |
 | `FERNET_KEY`, `CPF_HASH_PEPPER` | gateway   | criptografia e lookup de PII no modo standalone                 |

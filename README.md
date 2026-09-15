@@ -51,7 +51,7 @@ A stack sobe nesta ordem (com healthchecks): PostgreSQL, certgen (certificado TL
 Acessos:
 
 - Painel administrativo: `https://localhost`
-- API pública (Gateway): `https://localhost/api/v1/...` · health em `https://localhost/api/health`
+- API pública (Gateway): `https://localhost/api/v1/...` · health em `https://localhost/api/health` (as demais rotas `/api/*` são do próprio painel)
 - Swagger do Gateway: `https://localhost/api/docs` (apenas em dev)
 - Swagger do Core: `http://localhost:5000/docs` (apenas em dev, loopback do host)
 - Login padrão de demo: `admin@ford.com / admin123` (admin), `consultor@ford.com / cons123` (consultor), `analista@ford.com / analista123` (analista, somente leitura; existe apenas no Gateway)
