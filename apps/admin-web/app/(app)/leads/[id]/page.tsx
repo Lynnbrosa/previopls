@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
+import { BackendError } from '@/components/backend-error';
 import { LeadActions } from '@/components/lead-actions';
-import { ApiError, getLead } from '@/lib/api';
+import { ApiError, describeApiError, getLead } from '@/lib/api';
 import { formatCurrency, formatDate, formatDateTime, formatPercent } from '@/lib/utils';
 import { PERFIL_COR, PERFIL_LABEL, PRIORIDADE_COR, PRIORIDADE_LABEL, STATUS_LABEL } from '@/lib/labels';
 
@@ -11,7 +12,8 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
     lead = await getLead(params.id);
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) notFound();
-    throw err;
+    if (err instanceof ApiError && err.status === 401) redirect('/login?motivo=sessao');
+    return <BackendError message={describeApiError(err)} />;
   }
 
   return (

@@ -2,8 +2,9 @@ import { redirect } from 'next/navigation';
 import { LoginForm } from '@/components/login-form';
 import { getSession } from '@/lib/auth';
 
-export default function LoginPage() {
-  if (getSession()) {
+export default function LoginPage({ searchParams }: { searchParams?: { motivo?: string } }) {
+  const sessaoExpirada = searchParams?.motivo === 'sessao';
+  if (getSession() && !sessaoExpirada) {
     redirect('/dashboard');
   }
   return (
@@ -39,6 +40,11 @@ export default function LoginPage() {
           <p className="eyebrow">Entrar no painel</p>
           <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-900">Bem-vindo de volta</h2>
           <div className="ford-rule mt-4" />
+          {sessaoExpirada && (
+            <p className="mt-6 rounded-sm border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              O backend não aceitou sua sessão (token inválido ou expirado). Entre novamente.
+            </p>
+          )}
           <div className="mt-10">
             <LoginForm />
           </div>

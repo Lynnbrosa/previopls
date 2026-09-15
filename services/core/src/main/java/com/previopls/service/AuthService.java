@@ -8,6 +8,8 @@ import com.previopls.repository.UsuarioRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.Locale;
+
 @Service
 public class AuthService {
 
@@ -30,7 +32,8 @@ public class AuthService {
     }
 
     public LoginResponse login(LoginRequest request) {
-        String email = request.email();
+        // Usuários são gravados em minúsculo; "Admin@Ford.com" precisa autenticar igual.
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
 
         if (lockoutService.isLocked(email)) {
             auditService.logLoginLocked(email);

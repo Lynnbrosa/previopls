@@ -20,11 +20,19 @@ public final class RequestContext {
     }
 
     public static String remoteIp() {
-        HttpServletRequest req = currentRequest();
+        return remoteIp(currentRequest());
+    }
+
+    /**
+     * IP do cliente a partir da requisição informada. Use esta variante em filtros que rodam
+     * antes do {@code RequestContextFilter} do Spring (o holder ainda está vazio lá).
+     */
+    public static String remoteIp(HttpServletRequest req) {
         if (req == null) return null;
         String forwarded = req.getHeader("X-Forwarded-For");
         if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
+            String first = forwarded.split(",")[0].trim();
+            if (!first.isEmpty()) return first.length() > 64 ? first.substring(0, 64) : first;
         }
         return req.getRemoteAddr();
     }

@@ -1,4 +1,3 @@
-import os
 import sys
 from logging.config import fileConfig
 from pathlib import Path
@@ -16,12 +15,13 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Resolve DATABASE_URL via env (suporta .env já carregado pelo Settings)
-db_url = os.environ.get("DATABASE_URL")
-if not db_url:
-    from app.core.config import get_settings
-    db_url = get_settings().database_url
-config.set_main_option("sqlalchemy.url", db_url)
+# Sempre via Settings: aplica a mesma normalização da app (postgres:// -> postgresql+psycopg://)
+# e lê .env quando DATABASE_URL não está no ambiente.
+from app.core.config import get_settings  # noqa: E402
+
+db_url = get_settings().database_url
+# '%' precisa ser escapado para o ConfigParser do alembic (senhas com caracteres especiais).
+config.set_main_option("sqlalchemy.url", db_url.replace("%", "%%"))
 
 target_metadata = Base.metadata
 

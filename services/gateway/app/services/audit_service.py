@@ -10,6 +10,15 @@ from app.models import AuditAction, AuditLog
 
 log = get_logger(__name__)
 
+MAX_IP_LENGTH = 64  # audit_logs.remote_ip / login_attempts.remote_ip são VARCHAR(64)
+
+
+def client_ip(request: Optional[Request]) -> Optional[str]:
+    """IP do cliente como visto pelo uvicorn (proxy headers), limitado ao tamanho da coluna."""
+    if request is None or request.client is None or not request.client.host:
+        return None
+    return str(request.client.host)[:MAX_IP_LENGTH]
+
 
 class AuditService:
     def __init__(self, db: Session) -> None:
@@ -32,7 +41,7 @@ class AuditService:
         user_agent = None
         if request is not None:
             request_id = getattr(request.state, "request_id", None)
-            remote_ip = request.client.host if request.client else None
+            remote_ip = client_ip(request)
             user_agent = request.headers.get("User-Agent")
             if user_agent and len(user_agent) > 255:
                 user_agent = user_agent[:255]

@@ -14,7 +14,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
+    # Sem CREATE EXTENSION: os UUIDs são gerados pela aplicação (uuid4) e roles sem privilégio
+    # (ex.: role de aplicação no Neon) não conseguem instalar extensões, o que abortava a migration.
 
     op.create_table(
         "usuarios",

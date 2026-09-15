@@ -21,6 +21,8 @@ Painel Next.js do PrevioPLS. Plano Hobby (free) cobre tudo que o piloto precisa.
 
 O painel autentica no Gateway (JWT RS256) e o Gateway repassa as leituras/escritas de leads ao Core com o JWT interno HS256, então o seed real (300 clientes, 93 leads) aparece no painel sem apontar para o Core. Se precisar de um setup isolado sem Gateway, `INTERNAL_GATEWAY_URL` também aceita a URL do Core: o painel entende os dois contratos de login (ver [`apps/admin-web/README.md`](../../apps/admin-web/README.md)).
 
+As variáveis precisam estar no escopo **Production** (e Preview, se quiser testar PRs). Uma `INTERNAL_GATEWAY_URL` definida só em Preview deixa a produção com o default `http://gateway:8000`, inalcançável na Vercel: o painel mostra "Não foi possível conectar ao backend gateway:8000".
+
 ## Branch de produção
 
 Em Settings → Git, confirme que a Production Branch é a branch padrão do repositório (`feat/monorepo-consolidation`). Um deploy de produção preso a uma branch antiga mantém o painel com o código anterior, em que qualquer erro de login aparecia como "Credenciais inválidas".

@@ -60,8 +60,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
-        String ip = RequestContext.remoteIp();
-        if (ip == null) ip = "unknown";
+        // O filtro roda antes do RequestContextFilter do Spring; ler do request evita que
+        // todos os clientes compartilhem um único bucket "unknown".
+        String ip = RequestContext.remoteIp(request);
+        if (ip == null || ip.isBlank()) ip = "unknown";
 
         boolean isLogin = path.endsWith("/v1/auth/login");
         Bucket bucket = isLogin

@@ -35,10 +35,12 @@ class LockoutService:
         ) or 0
 
     def record(self, email: str, success: bool, request: Request | None = None) -> None:
+        from app.services.audit_service import client_ip
+
         attempt = LoginAttempt(
             email=email,
             success=success,
-            remote_ip=request.client.host if request and request.client else None,
+            remote_ip=client_ip(request),
         )
         self.db.add(attempt)
         self.db.flush()
