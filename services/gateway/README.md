@@ -12,7 +12,7 @@ Borda de segurança LGPD do PrevioPLS. Backend Python (**FastAPI · SQLAlchemy 2
 | **Proxy para o Core** (padrão do monorepo) | `CORE_API_URL` definido (ex.: `http://core:5000`) | O Gateway valida borda (TLS via nginx, JWT RS256, RBAC, HMAC, schema, rate limit), registra auditoria e repassa ao Core com um **JWT interno HS256** de 60 s assinado com `JWT_SECRET` (o mesmo do Core). A resposta do Core (contrato camelCase) é devolvida tal qual. Ver ADR-001/ADR-003 em [`ARCHITECTURE.md`](../../ARCHITECTURE.md). |
 | **Standalone** (repositório original da challenge) | `CORE_API_URL` vazio | O Gateway persiste cliente/veículo/lead no próprio banco, com PII em Fernet e classificação pelo stub determinístico. Contrato snake_case documentado no `/docs`. |
 
-Erros do repasse: falha de rede ou timeout vira `503 CORE_UNAVAILABLE`; um `401` do Core vira `502 CORE_AUTH_MISMATCH`, porque o token interno é assinado pelo próprio Gateway e a única causa é `JWT_SECRET` divergente entre os dois serviços (repassar o 401 derrubava a sessão do painel em loop). Os demais status do Core são devolvidos tal qual. No boot e a cada login o Gateway dispara um `GET /health` no Core em segundo plano (`CORE_WARMUP_SECONDS`, default 120 s) para acordar instâncias suspensas em free tier antes da primeira leitura do painel.
+Erros do repasse: falha de rede ou timeout vira `503 CORE_UNAVAILABLE`; um `401` do Core vira `502 CORE_AUTH_MISMATCH`, porque o token interno é assinado pelo próprio Gateway e a causa é configuração: `JWT_SECRET` divergente entre os dois serviços ou relógio do Core adiantado mais de 60 s em relação ao Gateway (TTL do token interno, validado sem tolerância) (repassar o 401 derrubava a sessão do painel em loop). Os demais status do Core são devolvidos tal qual. No boot e a cada login o Gateway dispara um `GET /health` no Core em segundo plano (`CORE_WARMUP_SECONDS`, default 120 s) para acordar instâncias suspensas em free tier antes da primeira leitura do painel.
 
 Em ambos os modos a autenticação (`/v1/auth/*`), a auditoria (`/v1/admin/audit-log`) e o `/v1/llm-assist` são do próprio Gateway. Headers `X-Request-Id` e `X-Forwarded-For` são propagados ao Core para correlacionar as duas trilhas de auditoria.
 
@@ -159,7 +159,7 @@ export CORE_API_URL=http://localhost:5000 JWT_SECRET=<mesmo-do-core>   # ou omit
 |---|---|---|
 | `CORE_API_URL` | vazio | URL interna do Core. Definida = modo proxy. |
 | `JWT_SECRET` | vazio | Segredo HS256 compartilhado com o Core; obrigatório no modo proxy. |
-| `CORE_TIMEOUT_SECONDS` | `5` | Timeout das chamadas ao Core (connect 2 s). Falha → `503 CORE_UNAVAILABLE`; `401` do Core → `502 CORE_AUTH_MISMATCH` (`JWT_SECRET` divergente). |
+| `CORE_TIMEOUT_SECONDS` | `5` | Timeout das chamadas ao Core (connect 2 s). Falha → `503 CORE_UNAVAILABLE`; `401` do Core → `502 CORE_AUTH_MISMATCH` (`JWT_SECRET` divergente ou relógio do Core adiantado > 60 s). |
 | `CORE_WARMUP_SECONDS` | `120` | No boot e a cada login, `GET /health` no Core em segundo plano para acordar instâncias suspensas (free tier). `0` desliga. |
 | `ROOT_PATH` | vazio | Prefixo público removido pelo proxy reverso (`/api` no compose). Só afeta `/docs`. |
 | `SEED_DEFAULT_USERS` | `true` fora de produção | Cria `admin@ford.com/admin123`, `consultor@ford.com/cons123`, `analista@ford.com/analista123`. |
