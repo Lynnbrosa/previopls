@@ -78,6 +78,9 @@ Online_Retail.xlsx
 # Notebooks runtime
 .ipynb_checkpoints/
 
+# Modelo gerado localmente (o Dockerfile do ml-api gera no build)
+services/ml/api/models/*.pkl
+
 # Secrets
 *.pem
 *.key

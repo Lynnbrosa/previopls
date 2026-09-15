@@ -68,6 +68,15 @@ ab -n 1000 -c 10 -p body.json -T application/json http://localhost:8000/predict
 
 Onde `body.json` contém o payload mostrado acima.
 
+## Testes
+
+```bash
+pip install -r requirements.txt pytest httpx
+pytest -q
+```
+
+A suíte treina o pipeline sintético uma vez por sessão e cobre: contrato do `/predict` (categorias desconhecidas, campos pós-venda rejeitados com 422, determinismo), `/health` e `/version`, e a validação anti-leakage do `load_model` (tokens e prefixos RFM banidos, classes fora do contrato, pipeline sem `feature_names_in_`).
+
 ## Variáveis de ambiente
 
 | Var              | Default                         | Descrição                                      |

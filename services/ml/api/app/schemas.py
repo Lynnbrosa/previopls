@@ -25,12 +25,17 @@ class PredictResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
+    # "model_version" colide com o namespace protegido "model_" do Pydantic v2.
+    model_config = ConfigDict(protected_namespaces=())
+
     status: Literal["ok", "degraded"]
     model_loaded: bool
     model_version: str
 
 
 class VersionResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     name: str
     version: str
     model_version: str
