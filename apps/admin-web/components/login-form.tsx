@@ -21,8 +21,13 @@ export function LoginForm() {
         body: JSON.stringify({ email, senha }),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body?.message ?? 'Credenciais inválidas');
+        // A route /api/auth/login sempre devolve JSON com "message". Se não veio, a resposta
+        // não é do painel (proxy reverso, timeout da função, 502/504) e o status ajuda a diagnosticar.
+        const body = await res.json().catch(() => null);
+        setError(
+          body?.message ??
+            `O servidor respondeu HTTP ${res.status} sem detalhes. Verifique se o painel e o backend estão no ar e tente novamente.`,
+        );
         setPending(false);
         return;
       }

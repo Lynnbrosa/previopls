@@ -45,7 +45,7 @@ PrevioPLS-Security/
 │   ├── models/                    SQLAlchemy ORM
 │   └── db/
 │       ├── session.py
-│       └── seed.py                Usuários padrão (dev/demo)
+│       └── seed.py                Usuários: seed de demo, bootstrap do 1º admin, CLI (python -m app.db.seed)
 ├── alembic/                       Migrações (aplicadas no boot pelo entrypoint)
 ├── docker-entrypoint.sh           Espera o banco → alembic upgrade head → uvicorn
 ├── nginx/
@@ -160,6 +160,7 @@ export CORE_API_URL=http://localhost:5000 JWT_SECRET=<mesmo-do-core>   # ou omit
 | `CORE_TIMEOUT_SECONDS` | `5` | Timeout das chamadas ao Core (connect 2 s). Falha → `503 CORE_UNAVAILABLE`. |
 | `ROOT_PATH` | vazio | Prefixo público removido pelo proxy reverso (`/api` no compose). Só afeta `/docs`. |
 | `SEED_DEFAULT_USERS` | `true` fora de produção | Cria `admin@ford.com/admin123`, `consultor@ford.com/cons123`, `analista@ford.com/analista123`. |
+| `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_PASSWORD`, `BOOTSTRAP_ADMIN_NAME` | vazio | Primeiro administrador em produção, criado no boot se não existir (a senha só vale na criação). Outros usuários: `python -m app.db.seed --email ... --papel consultor`. |
 | `JWT_AUTO_GENERATE_KEYS` | `true` fora de produção | Gera o par RSA se os arquivos não existirem. Em produção a ausência falha o boot. |
 | `APP_ENV` | `development` | `production` desliga `/docs` e os defaults de dev acima. |
 
@@ -214,6 +215,7 @@ Os testes não precisam de banco:
 
 - `tests/test_security.py`: Fernet round-trip, CPF hash determinístico, mascaramento de PII (CPF/email/telefone), JWT RS256 sign/verify + rejeição de tipo incorreto + tampering, HMAC constant-time, PII masking nos logs.
 - `tests/test_core_proxy.py`: tradução snake_case → camelCase para o Core, JWT interno HS256 (segredo compartilhado, TTL curto, distinto do RS256 externo), propagação de `X-Request-Id`/`X-Forwarded-For`, mapeamento de falha de rede para `503 CORE_UNAVAILABLE`, repasse de erros do Core, geração automática do par RSA em dev.
+- `tests/test_errors_and_seed.py`: contrato `{error:{code,message}}` também em 404/405 de rota desconhecida; seed/bootstrap idempotentes, e-mail normalizado, senha mínima, hash bcrypt.
 
 O workflow de CI do monorepo roda esta suíte em cada push.
 

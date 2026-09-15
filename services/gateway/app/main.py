@@ -28,16 +28,18 @@ async def lifespan(app: FastAPI):
     # Chaves RSA: em dev são geradas se não existirem; em prod a ausência falha o boot.
     ensure_jwt_keys()
 
-    # Usuários padrão (dev/demo). As migrations já rodaram no entrypoint (alembic upgrade head).
-    if settings.should_seed_default_users:
-        from app.db.seed import seed_default_users
+    # Usuários: primeiro admin de produção (BOOTSTRAP_ADMIN_*) e, fora de produção, os de demo.
+    # As migrations já rodaram no entrypoint (alembic upgrade head).
+    from app.db.seed import bootstrap_admin, seed_default_users
 
-        try:
-            with SessionLocal() as db:
-                created = seed_default_users(db)
-            log.info("seed.done", created=created)
-        except Exception as exc:  # não derruba a API: /health vai reportar o banco
-            log.error("seed.failed", error=str(exc))
+    try:
+        with SessionLocal() as db:
+            created_admin = bootstrap_admin(db)
+            created = seed_default_users(db) if settings.should_seed_default_users else 0
+        log.info("seed.done", bootstrap_admin=created_admin, demo_users_created=created,
+                 demo_seed_enabled=settings.should_seed_default_users)
+    except Exception as exc:  # não derruba a API: /health vai reportar o banco
+        log.error("seed.failed", error=str(exc))
 
     log.info(
         "app.started",

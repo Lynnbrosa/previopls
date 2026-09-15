@@ -21,7 +21,9 @@ Edge de segurança LGPD do PrevioPLS. Único serviço Render exposto publicament
 | `DATABASE_URL`          | `postgresql+psycopg://<user>:<pass>@<neon-host>/previopls_gateway?sslmode=require` |
 | `CORE_API_URL`          | URL interna do core na Render (`https://previopls-core.onrender.com`) — ativa o modo proxy |
 | `JWT_SECRET`            | o mesmo segredo HS256 configurado no core (assina o JWT interno por requisição) |
-| `SEED_DEFAULT_USERS`    | `false` (crie os usuários reais via SQL/Alembic; `true` só em demo)  |
+| `SEED_DEFAULT_USERS`    | `false` (`true` só em demo: cria admin@ford.com/admin123 etc.)       |
+| `BOOTSTRAP_ADMIN_EMAIL` | e-mail do primeiro administrador (criado no boot se não existir)      |
+| `BOOTSTRAP_ADMIN_PASSWORD` | senha inicial do primeiro administrador (só aplicada na criação)   |
 | `JWT_AUTO_GENERATE_KEYS`| `false` (chaves vêm de Secret Files)                                  |
 | `FERNET_KEY`            | gerado uma vez, mesmo valor em todos os ambientes                     |
 | `CPF_HASH_PEPPER`       | 32 bytes aleatórios                                                   |
@@ -39,6 +41,14 @@ As chaves RSA do JWT precisam ser materializadas no container. No piloto, gere c
 ## Migrations e boot
 
 O entrypoint do container espera o banco, roda `alembic upgrade head` e só então sobe o uvicorn. Não há passo manual de migration. Em produção o boot falha se as chaves RSA não estiverem montadas (nenhuma chave é gerada automaticamente com `APP_ENV=production`).
+
+## Usuários
+
+O Gateway não tem endpoint de gestão de usuários. Sem `SEED_DEFAULT_USERS=true` e sem `BOOTSTRAP_ADMIN_*`, um Gateway novo em produção não tem nenhum usuário e todo login responde 401 ("Credenciais inválidas" no painel). Defina `BOOTSTRAP_ADMIN_EMAIL` e `BOOTSTRAP_ADMIN_PASSWORD` antes do primeiro deploy. Para criar consultores e analistas, use o shell do serviço na Render:
+
+```bash
+GATEWAY_USER_PASSWORD='senha-forte' python -m app.db.seed --email consultor@concessionaria.com.br --papel consultor --nome "Nome"
+```
 
 ## Health check
 

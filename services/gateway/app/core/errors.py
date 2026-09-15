@@ -1,11 +1,12 @@
 import uuid
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.logging import get_logger
 
@@ -75,8 +76,8 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def handle_app_error(_request: Request, exc: AppError):
         return JSONResponse(status_code=exc.status_code, content=_body(exc.code, exc.message, exc.details))
 
-    @app.exception_handler(HTTPException)
-    async def handle_http(_request: Request, exc: HTTPException):
+    @app.exception_handler(StarletteHTTPException)
+    async def handle_http(_request: Request, exc: StarletteHTTPException):
         default_code = _STATUS_CODES.get(exc.status_code, "HTTP_ERROR")
         headers = getattr(exc, "headers", None)
         if isinstance(exc.detail, dict):
