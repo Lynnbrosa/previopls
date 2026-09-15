@@ -1,23 +1,18 @@
 import Link from 'next/link';
 import { listLeads } from '@/lib/api';
 import { formatDate, formatPercent } from '@/lib/utils';
-import type { Prioridade, StatusLead } from '@/types/api';
 
-const PRIORIDADE_COR: Record<Prioridade, string> = {
-  CRITICA: 'bg-red-600 text-white',
-  ALTA: 'bg-orange-500 text-white',
-  MEDIA: 'bg-yellow-500 text-white',
-  BAIXA: 'bg-slate-300 text-slate-700',
-};
-const STATUS_COR: Record<StatusLead, string> = {
-  aberto: 'bg-emerald-100 text-emerald-700',
-  agendado: 'bg-blue-100 text-blue-700',
-  recusado: 'bg-red-50 text-red-700',
-  'sem-contato': 'bg-slate-100 text-slate-600',
-};
 
-const PRIORIDADES: Prioridade[] = ['CRITICA', 'ALTA', 'MEDIA', 'BAIXA'];
-const STATUSES: StatusLead[] = ['aberto', 'agendado', 'recusado', 'sem-contato'];
+import {
+  PERFIL_COR,
+  PERFIL_LABEL,
+  PRIORIDADES,
+  PRIORIDADE_COR,
+  PRIORIDADE_LABEL,
+  STATUSES,
+  STATUS_COR,
+  STATUS_LABEL,
+} from '@/lib/labels';
 
 export default async function LeadsPage({
   searchParams,
@@ -60,8 +55,8 @@ export default async function LeadsPage({
       <section className="card">
         <div className="card-header">
           <form className="flex flex-wrap items-end gap-4 text-sm">
-            <FiltroSelect name="status" label="Status" valor={searchParams.status} opcoes={STATUSES} />
-            <FiltroSelect name="prioridade" label="Prioridade" valor={searchParams.prioridade} opcoes={PRIORIDADES} />
+            <FiltroSelect name="status" label="Status" valor={searchParams.status} opcoes={STATUSES} labels={STATUS_LABEL} />
+            <FiltroSelect name="prioridade" label="Prioridade" valor={searchParams.prioridade} opcoes={PRIORIDADES} labels={PRIORIDADE_LABEL} />
             <div className="flex gap-2">
               <button type="submit" className="btn-primary">Filtrar</button>
               <Link href="/leads" className="btn-secondary">Limpar</Link>
@@ -75,6 +70,7 @@ export default async function LeadsPage({
               <tr>
                 <th className="px-6 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Cliente</th>
                 <th className="px-6 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Veículo</th>
+                <th className="px-6 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Perfil</th>
                 <th className="px-6 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Prioridade</th>
                 <th className="px-6 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Score</th>
                 <th className="px-6 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Status</th>
@@ -85,7 +81,7 @@ export default async function LeadsPage({
             <tbody className="divide-y divide-slate-100 bg-white">
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-16 text-center text-sm text-slate-400">
+                  <td colSpan={8} className="py-16 text-center text-sm text-slate-400">
                     Nenhum lead encontrado para os filtros atuais.
                   </td>
                 </tr>
@@ -95,14 +91,23 @@ export default async function LeadsPage({
                     <td className="px-6 py-4 font-semibold text-slate-900">{lead.nomeCliente}</td>
                     <td className="px-6 py-4 text-slate-700">{lead.modeloVeiculo}</td>
                     <td className="px-6 py-4">
+                      {lead.perfil ? (
+                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${PERFIL_COR[lead.perfil]}`}>
+                          {PERFIL_LABEL[lead.perfil]}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${PRIORIDADE_COR[lead.prioridade]}`}>
-                        {lead.prioridade}
+                        {PRIORIDADE_LABEL[lead.prioridade]}
                       </span>
                     </td>
                     <td className="px-6 py-4 font-semibold text-slate-800">{formatPercent(lead.scoreRisco)}</td>
                     <td className="px-6 py-4">
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COR[lead.status]}`}>
-                        {lead.status}
+                        {STATUS_LABEL[lead.status]}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-slate-500">{formatDate(lead.criadoEm)}</td>
@@ -151,11 +156,13 @@ function FiltroSelect({
   label,
   valor,
   opcoes,
+  labels,
 }: {
   name: string;
   label: string;
   valor?: string;
   opcoes: readonly string[];
+  labels: Record<string, string>;
 }) {
   return (
     <label className="flex flex-col gap-1.5">
@@ -164,7 +171,7 @@ function FiltroSelect({
         <option value="">todos</option>
         {opcoes.map((opt) => (
           <option key={opt} value={opt}>
-            {opt}
+            {labels[opt] ?? opt}
           </option>
         ))}
       </select>

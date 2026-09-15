@@ -1,6 +1,14 @@
 import { getSession } from '@/lib/auth';
-import type { LeadDetail, LeadListPage, LeadPatchRequest, LoginRequest, LoginResponse } from '@/types/api';
+import type {
+  LeadDetail,
+  LeadListPage,
+  LeadPatchRequest,
+  LoginRequest,
+  LoginResponse,
+  RawLoginResponse,
+} from '@/types/api';
 
+// Base interna: Gateway (borda LGPD) por padrão. Pode apontar direto ao Core em setups isolados.
 const INTERNAL_BASE = process.env.INTERNAL_GATEWAY_URL ?? 'http://gateway:8000';
 
 function buildUrl(path: string): string {
@@ -45,7 +53,24 @@ export async function login(payload: LoginRequest): Promise<LoginResponse> {
     const body = await res.text().catch(() => '');
     throw new ApiError(res.status, body);
   }
-  return (await res.json()) as LoginResponse;
+  return normalizeLogin((await res.json()) as RawLoginResponse);
+}
+
+/**
+ * Gateway (FastAPI) responde snake_case com refresh token; Core (Spring) responde camelCase.
+ * O painel só precisa do access token, do papel e da validade.
+ */
+export function normalizeLogin(raw: RawLoginResponse): LoginResponse {
+  const accessToken = raw.accessToken ?? raw.access_token;
+  if (!accessToken) {
+    throw new ApiError(502, 'login response without access token');
+  }
+  return {
+    accessToken,
+    tokenType: raw.tokenType ?? raw.token_type ?? 'Bearer',
+    expiresIn: raw.expiresIn ?? raw.access_expires_in ?? 900,
+    role: raw.role,
+  };
 }
 
 export interface LeadsQuery {

@@ -24,7 +24,7 @@ Painel de gestão do PrevioPLS, usado pelo gerente de pós-venda da concessioná
 
 ## Autenticação
 
-O form de login posta para `POST /api/auth/login`, uma route handler do Next.js que chama o backend (`/v1/auth/login`) usando `INTERNAL_GATEWAY_URL`. O JWT volta na resposta e é gravado num cookie httpOnly secure (`previopls_jwt`). Páginas protegidas usam o `(app)/layout.tsx`, que redireciona para `/login` quando o cookie não está presente. Logout faz POST em `/api/auth/logout`, que apenas limpa o cookie.
+O form de login posta para `POST /api/auth/login`, uma route handler do Next.js que chama o backend (`/v1/auth/login`) usando `INTERNAL_GATEWAY_URL`. O painel aceita os dois contratos de resposta (Gateway: `access_token`/`access_expires_in`; Core: `accessToken`/`expiresIn`) e grava o JWT num cookie httpOnly secure (`previopls_jwt`). Erros são traduzidos para o usuário: 401 credenciais/lockout, 429 rate limit do login, 5xx backend indisponível. Páginas protegidas usam o `(app)/layout.tsx`, que redireciona para `/login` quando o cookie não está presente. Logout faz POST em `/api/auth/logout`, que apenas limpa o cookie.
 
 Todo fetch de dados acontece server-side via `lib/api.ts`, que lê o cookie e injeta `Authorization: Bearer ...` nos requests para o backend. O cliente nunca vê o JWT em JavaScript.
 
@@ -36,7 +36,11 @@ Todo fetch de dados acontece server-side via `lib/api.ts`, que lê o cookie e in
 | `INTERNAL_GATEWAY_URL`    | `http://gateway:8000`     | Base usada pelos server components/API routes do Next.js dentro do compose. |
 | `NODE_ENV`                | `production` em prod      | Padrão do Next.js.                                                  |
 
-No `infra/docker-compose.yml`, `INTERNAL_GATEWAY_URL` está configurado para apontar ao Gateway interno. Em piloto, se o Gateway ainda não tiver users seed (Alembic do Gateway não traz seeds), aponte temporariamente para o Core (`http://core:5000`), que tem `DataSeeder` carregando admin e consultor padrão. Detalhes da decisão em `ARCHITECTURE.md`, ADR-001.
+No `infra/docker-compose.yml`, `INTERNAL_GATEWAY_URL` aponta ao Gateway, que autentica (RS256) e repassa leads ao Core (HS256 interno). Para um setup isolado sem Gateway, a mesma variável aceita a URL do Core (`http://core:5000`). Detalhes em `ARCHITECTURE.md`, ADR-001.
+
+## Contrato de dados
+
+Os enums chegam do Core em minúsculo (`prioridade: 'critica'`, `perfil: 'abandono'`, `status: 'sem-contato'`). `lib/labels.ts` centraliza rótulos e cores para exibição; `types/api.ts` reflete o JSON exatamente como o backend serializa. A lista de leads inclui `perfil`, usado na tabela e nos filtros.
 
 ## Como rodar isolado
 

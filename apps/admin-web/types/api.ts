@@ -1,6 +1,7 @@
-export type Perfil = 'FIEL' | 'ABANDONO' | 'ESQUECIDO' | 'ECONOMICO';
+// Valores exatamente como o Core serializa (@JsonValue em minúsculo).
+export type Perfil = 'fiel' | 'abandono' | 'esquecido' | 'economico';
 
-export type Prioridade = 'CRITICA' | 'ALTA' | 'MEDIA' | 'BAIXA';
+export type Prioridade = 'critica' | 'alta' | 'media' | 'baixa';
 
 export type StatusLead = 'aberto' | 'agendado' | 'recusado' | 'sem-contato';
 
@@ -15,6 +16,17 @@ export interface LoginResponse {
   accessToken: string;
   tokenType: string;
   expiresIn: number;
+  role: Role;
+}
+
+/** Resposta bruta do backend: Core (camelCase) ou Gateway (snake_case + refresh token). */
+export interface RawLoginResponse {
+  accessToken?: string;
+  access_token?: string;
+  tokenType?: string;
+  token_type?: string;
+  expiresIn?: number;
+  access_expires_in?: number;
   role: Role;
 }
 
@@ -48,6 +60,7 @@ export interface LeadListItem {
   veiculoId: string;
   nomeCliente: string;
   modeloVeiculo: string;
+  perfil: Perfil | null;
   scoreRisco: number;
   prioridade: Prioridade;
   status: StatusLead;
