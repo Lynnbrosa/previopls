@@ -44,6 +44,8 @@ class ClienteServiceTest {
     LeadRepository leadRepository;
     @Mock
     MlService mlService;
+    @Mock
+    AuditService auditService;
 
     @InjectMocks
     ClienteService service;

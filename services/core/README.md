@@ -1,14 +1,8 @@
-Nomes e RMs,
-Giovanne Charelli Zaniboni Silva | 556223 
-Leonardo Pasquini Baldaia | 557416 
-Gustavo Oliveira de Moura | 555827 
-Lynn Bueno Rosa | 551102
-
 # PrevioPLS — Ford Predict & Care (Backend)
 
 Plataforma preditiva de retenção pós-venda Ford. Backend SOA em **Java 21 + Spring Boot 3 + Spring Data JPA + PostgreSQL + Flyway**.
 
-Entrega da Sprint Ford FIAP 2026 — Arquitetura Orientada a Serviços e Web Services.
+Nascido na Sprint Ford FIAP 2026 (Arquitetura Orientada a Serviços e Web Services). No monorepo é o **serviço de domínio** na rede interna: recebe tráfego do Gateway (JWT interno HS256 assinado com o mesmo `JWT_SECRET`) e do app mobile em dev, e delega a classificação ao `ml-api` (ver [`ARCHITECTURE.md`](../../ARCHITECTURE.md)).
 
 ## Visão geral
 
@@ -106,11 +100,13 @@ PrevioPLS/
 | GET    | `/version`                                    | público            | Nome, versão e build do serviço                                          |
 | POST   | `/v1/auth/login`                              | público            | Autentica e retorna JWT (campo `role`: `admin` / `consultor`)            |
 | POST   | `/v1/clientes`                                | ADMIN              | Input D0 da compra → cria cliente+veículo, dispara classificação, gera lead |
-| GET    | `/v1/leads?prioridade=alta&status=aberto`     | CONSULTOR ou ADMIN | Lista paginada de leads (filtros + ordenação por prioridade e score)     |
-| GET    | `/v1/leads/{id}`                              | CONSULTOR ou ADMIN | Visão 360 — cliente + veículo + script comercial                         |
+| GET    | `/v1/leads?prioridade=alta&status=aberto`     | CONSULTOR, ADMIN ou ANALISTA | Lista paginada de leads (filtros + ordenação por prioridade e score). Cada item traz `perfil` do cliente |
+| GET    | `/v1/leads/{id}`                              | CONSULTOR, ADMIN ou ANALISTA | Visão 360 — cliente + veículo + script comercial                         |
 | PATCH  | `/v1/leads/{id}`                              | CONSULTOR ou ADMIN | Atualiza status (`agendado` / `recusado` / `sem-contato`)                |
 
 Endpoints de negócio são versionados sob `/v1/` para permitir evolução do contrato sem quebrar o app mobile já distribuído. `/health` e `/version` permanecem fora do versionamento (padrão de infraestrutura).
+
+Enums saem no JSON em minúsculo (`"prioridade": "critica"`, `"perfil": "abandono"`, `"status": "sem-contato"`) e são aceitos na entrada tanto em minúsculo quanto pelo nome Java (`CRITICA`). O papel `ANALISTA` não existe na tabela `usuarios` do Core; ele chega apenas via JWT interno emitido pelo Gateway e tem acesso somente leitura.
 
 Swagger UI interativo: `http://localhost:5000/docs`. OpenAPI JSON ao vivo: `http://localhost:5000/v3/api-docs`.
 
@@ -167,7 +163,8 @@ Na primeira inicialização:
 | `DATABASE_URL`          | `jdbc:postgresql://localhost:5432/previopls`         | URL JDBC                               |
 | `DB_USERNAME`           | `postgres`                                           | Usuário do banco                       |
 | `DB_PASSWORD`           | `postgres`                                           | Senha do banco                         |
-| `JWT_SECRET`            | (dev only — trocar em prod, mínimo 32 bytes)         | Chave HMAC HS256                       |
+| `JWT_SECRET`            | (dev only — trocar em prod, mínimo 32 bytes)         | Chave HMAC HS256 (compartilhada com o Gateway, que assina o JWT interno com ela) |
+| `ML_API_URL`            | `http://ml-api:8000`                                 | Servidor de inferência; fallback `ESQUECIDO`/0.5 se indisponível |
 | `JWT_EXPIRATION_HOURS`  | `8`                                                  | Expiração do access token              |
 | `CORS_ORIGINS`          | `http://localhost:8081,http://localhost:19006`       | Origens autorizadas (vírgula)          |
 
@@ -310,6 +307,7 @@ Mapeamento contra a rubrica de **Cybersecurity** (100 pts) da challenge:
   - `CLIENTE_CREATED` (com perfil + score)
   - `LEAD_CREATED`, `LEAD_PATCHED` (com transição de status)
   - `UNAUTHORIZED_ACCESS` (401), `FORBIDDEN_ACCESS` (403) — detecta tentativas de quebra de RBAC
+  - `actor_id` e `actor_role` são preenchidos a partir do JWT autenticado (inclusive o JWT interno do Gateway); `request_id` e `remote_ip` vêm de `X-Request-Id` / `X-Forwarded-For`, então a trilha do Core casa com a do Gateway
 - **Eventos suspeitos**: o lockout cobre tentativas repetidas. Para detecção mais ampla, querys SQL sobre `audit_logs` agrupando por IP + janela de tempo (consultas massivas, tentativas de escalation) — exemplo no README abaixo.
 
 ### Operações de segurança comuns
@@ -393,23 +391,17 @@ Distribuição resultante: ~39% Fiel, ~30% Econômico, ~17% Esquecido, ~14% Aban
 
 ### Regenerar o seed
 
-O script gerador (`build_seed.py`) vive no repositório **IA/ML** (`challenge-IAML`) porque é um pipeline de preparação de dados — Python, sklearn, criptografia AES.
-
-Para gerar uma nova versão do `V3__seed_real_data.sql`:
-
-1. Clone também o repo IA/ML: `git clone https://github.com/Lynnbrosa/challenge-IAML.git`
-2. Siga o README de lá pra obter a planilha Ford e rodar `python scripts/build_seed.py`.
-3. Aponte o output diretamente para esta pasta de migrations:
+O script gerador vive em [`scripts/build-seed/build_seed.py`](../../scripts/build-seed/build_seed.py) (pipeline de preparação de dados: openpyxl + AES-GCM). Com a planilha Ford em mãos:
 
 ```bash
 APP_CRYPTO_KEY=<mesma-do-backend> \
-  python scripts/build_seed.py \
-    data/vin_share_Desafio_02.xlsx \
+  python scripts/build-seed/build_seed.py \
+    /caminho/vin_share_Desafio_02.xlsx \
     300 \
-    ../challenge-SOA/src/main/resources/db/migration/V3__seed_real_data.sql
+    services/core/src/main/resources/db/migration/V3__seed_real_data.sql
 ```
 
-A `APP_CRYPTO_KEY` usada na geração precisa ser **a mesma** que o backend Java vai consumir — senão a decriptação Fernet falha ao ler os clientes.
+A `APP_CRYPTO_KEY` usada na geração precisa ser **a mesma** que o backend Java vai consumir — senão a decriptação AES-GCM falha ao ler email/telefone dos clientes.
 
 ## Rubrica × entregas
 
@@ -423,8 +415,9 @@ A `APP_CRYPTO_KEY` usada na geração precisa ser **a mesma** que o backend Java
 | REST + JSON + erros sem stack (15%)             | `GlobalExceptionHandler` + `server.error.include-stacktrace=never`        |
 | JPA + migrações (15%)                           | `entity/*` (Hibernate) + `migration/V1__initial_schema.sql` (Flyway)      |
 
-## Repositórios irmãos da challenge
+## Vizinhos no monorepo
 
-- [`challenge-Mobile`](https://github.com/Lynnbrosa/challenge-Mobile) — app React Native do consultor (consome esta API)
-- [`challenge-IAML`](https://github.com/Lynnbrosa/challenge-IAML) — notebook IA/ML + gerador do seed (`V3__seed_real_data.sql` deste repo)
-- [`challenge-Cyber`](https://github.com/Lynnbrosa/challenge-Cyber) — controles paralelos de Cybersecurity / LGPD em Python (Fernet, audit, HMAC, TLS)
+- [`apps/consultor-mobile`](../../apps/consultor-mobile) — app React Native do consultor (consome esta API direto em dev)
+- [`services/gateway`](../gateway) — borda LGPD que repassa `/v1/clientes` e `/v1/leads*` para este serviço
+- [`services/ml`](../ml) — notebook IA/ML + `ml-api` chamado pelo `MlService`
+- [`scripts/build-seed`](../../scripts/build-seed) — gerador do `V3__seed_real_data.sql`

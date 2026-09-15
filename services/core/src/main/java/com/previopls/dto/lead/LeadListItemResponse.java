@@ -1,5 +1,6 @@
 package com.previopls.dto.lead;
 
+import com.previopls.entity.enums.PerfilCliente;
 import com.previopls.entity.enums.PrioridadeLead;
 import com.previopls.entity.enums.StatusLead;
 
@@ -12,6 +13,7 @@ public record LeadListItemResponse(
         UUID veiculoId,
         String nomeCliente,
         String modeloVeiculo,
+        PerfilCliente perfil,
         Double scoreRisco,
         PrioridadeLead prioridade,
         StatusLead status,

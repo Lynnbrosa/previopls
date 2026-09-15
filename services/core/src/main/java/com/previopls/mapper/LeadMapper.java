@@ -16,6 +16,7 @@ public final class LeadMapper {
                 l.getVeiculo().getId(),
                 l.getCliente().getNome(),
                 l.getVeiculo().getModelo() + " " + l.getVeiculo().getVersao(),
+                l.getCliente().getPerfil(),
                 l.getScoreRisco(),
                 l.getPrioridade(),
                 l.getStatus(),
