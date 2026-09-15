@@ -6,6 +6,7 @@ from app.core.security import Principal, current_principal
 from app.db.session import get_db
 from app.schemas.auth import LoginRequest, RefreshRequest, TokenPair
 from app.services.auth_service import AuthService
+from app.services.core_client import warm_up_core
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -21,6 +22,8 @@ def login(
     service = AuthService(db)
     tokens = service.login(payload.email, payload.senha, request)
     db.commit()
+    # Free tier: começa a acordar o Core enquanto o painel navega para o dashboard.
+    warm_up_core()
     return tokens
 
 

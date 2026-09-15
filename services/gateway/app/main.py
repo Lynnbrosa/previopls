@@ -50,6 +50,12 @@ async def lifespan(app: FastAPI):
         except Exception as exc:
             log.error("seed.demo_users_failed", error=str(exc))
 
+    # Modo proxy: acorda o Core em segundo plano (free tier suspende após inatividade).
+    if settings.core_proxy_enabled:
+        from app.services.core_client import warm_up_core
+
+        warm_up_core()
+
     log.info(
         "app.started",
         env=settings.app_env,
@@ -113,6 +119,7 @@ def create_app() -> FastAPI:
 
     @app.get("/health", tags=["meta"])
     def health():
+        mode = "core-proxy" if settings.core_proxy_enabled else "standalone"
         components: dict[str, str] = {}
         try:
             with engine.connect() as conn:
@@ -122,7 +129,7 @@ def create_app() -> FastAPI:
             components["database"] = "down"
             return JSONResponse(
                 status_code=503,
-                content={"status": "degraded", "components": components},
+                content={"status": "degraded", "mode": mode, "components": components},
             )
 
         if settings.core_proxy_enabled:
@@ -131,7 +138,7 @@ def create_app() -> FastAPI:
             components["core"] = "up" if CoreClient().health() else "down"
 
         degraded = any(v != "up" for v in components.values())
-        return {"status": "degraded" if degraded else "ok", "components": components}
+        return {"status": "degraded" if degraded else "ok", "mode": mode, "components": components}
 
     @app.get("/version", tags=["meta"])
     def version():

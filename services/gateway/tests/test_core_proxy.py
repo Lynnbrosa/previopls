@@ -4,6 +4,8 @@ Testes do modo proxy Gateway -> Core (ADR-001 / ADR-003), sem banco e sem Core r
 - tradução do DTO snake_case para o contrato camelCase do Core;
 - JWT interno HS256 verificável com o mesmo segredo do Core, papel preservado, TTL curto;
 - indisponibilidade do Core vira 503 CORE_UNAVAILABLE;
+- 401 do Core (token interno rejeitado) vira 502 CORE_AUTH_MISMATCH, nunca 401 ao usuário;
+- aquecimento do Core em segundo plano roda uma vez por vez e engole erros;
 - headers de correlação (X-Request-Id, X-Forwarded-For) propagados;
 - geração automática do par RSA em ambiente de desenvolvimento.
 """
@@ -31,7 +33,13 @@ get_settings.cache_clear()
 
 from app.core.security import Principal, Role, create_internal_token, ensure_jwt_keys  # noqa: E402
 from app.schemas.cliente import ClienteCreate  # noqa: E402
-from app.services.core_client import CoreClient, CoreUnavailableError, to_core_payload  # noqa: E402
+from app.services.core_client import (  # noqa: E402
+    CoreAuthMismatchError,
+    CoreClient,
+    CoreUnavailableError,
+    to_core_payload,
+    warm_up_core,
+)
 
 
 def _principal(role: Role = Role.ADMIN) -> Principal:
@@ -134,6 +142,45 @@ def test_forward_maps_connection_error_to_503():
         CoreClient(client).forward("GET", "/v1/leads", principal=_principal())
     assert excinfo.value.status_code == 503
     assert excinfo.value.code == "CORE_UNAVAILABLE"
+
+
+def test_forward_maps_core_401_to_502_auth_mismatch():
+    """O token interno é assinado pelo próprio Gateway: 401 do Core é JWT_SECRET divergente, não sessão do usuário."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"error": {"code": "UNAUTHORIZED", "message": "Token inválido"}})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://core.test:5000")
+    with pytest.raises(CoreAuthMismatchError) as excinfo:
+        CoreClient(client).forward("GET", "/v1/leads", principal=_principal())
+    assert excinfo.value.status_code == 502
+    assert excinfo.value.code == "CORE_AUTH_MISMATCH"
+    assert "JWT_SECRET" in excinfo.value.message
+    assert excinfo.value.details == {"upstream": "core", "upstream_status": 401}
+
+
+def test_warm_up_core_runs_once_in_background_and_swallows_errors():
+    import threading
+
+    started, release = threading.Event(), threading.Event()
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        started.set()
+        release.wait(2)
+        raise httpx.ReadTimeout("core dormindo", request=request)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://core.test:5000")
+    first = warm_up_core(client=client)
+    assert first is not None and started.wait(2)
+    assert warm_up_core(client=client) is None  # já tem um aquecimento em andamento
+    release.set()
+    first.join(2)
+    assert not first.is_alive()  # o erro do Core foi engolido, sem propagar
+    assert calls == ["http://core.test:5000/health"]
+    assert warm_up_core(client=client) is not None  # liberado de novo após terminar
+    assert warm_up_core(client=client, timeout_seconds=0) is None  # CORE_WARMUP_SECONDS=0 desliga
 
 
 def test_forward_passes_upstream_errors_through():
