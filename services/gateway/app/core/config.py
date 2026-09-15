@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     jwt_secret: str = ""
     core_timeout_seconds: float = 5.0
     core_internal_token_ttl_seconds: int = 60
+    # Aquecimento do Core em segundo plano (free tier suspende após inatividade). 0 desliga.
+    core_warmup_seconds: float = 120.0
 
     # Cria admin@ford.com / consultor@ford.com / analista@ford.com no boot.
     # Default: apenas fora de produção.

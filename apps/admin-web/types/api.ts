@@ -91,3 +91,22 @@ export interface LeadPatchRequest {
   status: StatusLead;
   observacao?: string;
 }
+
+/** Diagnóstico da cadeia painel → gateway → banco → core, montado no servidor quando uma leitura falha. */
+export interface BackendDiagnosis {
+  /** Host de INTERNAL_GATEWAY_URL, sem credenciais. */
+  backend: string;
+  /** INTERNAL_GATEWAY_URL não definida: o painel está usando o default do compose (gateway:8000). */
+  defaultBase: boolean;
+  /** Painel rodando na Vercel (variável VERCEL=1). */
+  vercel: boolean;
+  gateway: 'up' | 'degraded' | 'down' | 'timeout';
+  /** HTTP do GET /health do backend, quando respondeu. */
+  status: number | null;
+  /** components do /health do Gateway: database e core (este só no modo proxy). */
+  components: Record<string, string>;
+  mode: string | null;
+  version: string | null;
+  /** Código de erro de rede (ENOTFOUND, ECONNREFUSED...) ou observação sobre a resposta. */
+  detail: string | null;
+}

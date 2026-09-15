@@ -12,6 +12,8 @@ Borda de segurança LGPD do PrevioPLS. Backend Python (**FastAPI · SQLAlchemy 2
 | **Proxy para o Core** (padrão do monorepo) | `CORE_API_URL` definido (ex.: `http://core:5000`) | O Gateway valida borda (TLS via nginx, JWT RS256, RBAC, HMAC, schema, rate limit), registra auditoria e repassa ao Core com um **JWT interno HS256** de 60 s assinado com `JWT_SECRET` (o mesmo do Core). A resposta do Core (contrato camelCase) é devolvida tal qual. Ver ADR-001/ADR-003 em [`ARCHITECTURE.md`](../../ARCHITECTURE.md). |
 | **Standalone** (repositório original da challenge) | `CORE_API_URL` vazio | O Gateway persiste cliente/veículo/lead no próprio banco, com PII em Fernet e classificação pelo stub determinístico. Contrato snake_case documentado no `/docs`. |
 
+Erros do repasse: falha de rede ou timeout vira `503 CORE_UNAVAILABLE`; um `401` do Core vira `502 CORE_AUTH_MISMATCH`, porque o token interno é assinado pelo próprio Gateway e a única causa é `JWT_SECRET` divergente entre os dois serviços (repassar o 401 derrubava a sessão do painel em loop). Os demais status do Core são devolvidos tal qual. No boot e a cada login o Gateway dispara um `GET /health` no Core em segundo plano (`CORE_WARMUP_SECONDS`, default 120 s) para acordar instâncias suspensas em free tier antes da primeira leitura do painel.
+
 Em ambos os modos a autenticação (`/v1/auth/*`), a auditoria (`/v1/admin/audit-log`) e o `/v1/llm-assist` são do próprio Gateway. Headers `X-Request-Id` e `X-Forwarded-For` são propagados ao Core para correlacionar as duas trilhas de auditoria.
 
 **Repositórios irmãos da challenge:**
@@ -157,7 +159,8 @@ export CORE_API_URL=http://localhost:5000 JWT_SECRET=<mesmo-do-core>   # ou omit
 |---|---|---|
 | `CORE_API_URL` | vazio | URL interna do Core. Definida = modo proxy. |
 | `JWT_SECRET` | vazio | Segredo HS256 compartilhado com o Core; obrigatório no modo proxy. |
-| `CORE_TIMEOUT_SECONDS` | `5` | Timeout das chamadas ao Core (connect 2 s). Falha → `503 CORE_UNAVAILABLE`. |
+| `CORE_TIMEOUT_SECONDS` | `5` | Timeout das chamadas ao Core (connect 2 s). Falha → `503 CORE_UNAVAILABLE`; `401` do Core → `502 CORE_AUTH_MISMATCH` (`JWT_SECRET` divergente). |
+| `CORE_WARMUP_SECONDS` | `120` | No boot e a cada login, `GET /health` no Core em segundo plano para acordar instâncias suspensas (free tier). `0` desliga. |
 | `ROOT_PATH` | vazio | Prefixo público removido pelo proxy reverso (`/api` no compose). Só afeta `/docs`. |
 | `SEED_DEFAULT_USERS` | `true` fora de produção | Cria `admin@ford.com/admin123`, `consultor@ford.com/cons123`, `analista@ford.com/analista123`. |
 | `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_PASSWORD`, `BOOTSTRAP_ADMIN_NAME` | vazio | Primeiro administrador em produção, criado no boot se não existir (a senha só vale na criação). Outros usuários: `python -m app.db.seed --email ... --papel consultor`. |
@@ -214,7 +217,7 @@ pytest -v
 Os testes não precisam de banco:
 
 - `tests/test_security.py`: Fernet round-trip, CPF hash determinístico, mascaramento de PII (CPF/email/telefone), JWT RS256 sign/verify + rejeição de tipo incorreto + tampering, HMAC constant-time, PII masking nos logs.
-- `tests/test_core_proxy.py`: tradução snake_case → camelCase para o Core, JWT interno HS256 (segredo compartilhado, TTL curto, distinto do RS256 externo), propagação de `X-Request-Id`/`X-Forwarded-For`, mapeamento de falha de rede para `503 CORE_UNAVAILABLE`, repasse de erros do Core, geração automática do par RSA em dev.
+- `tests/test_core_proxy.py`: tradução snake_case → camelCase para o Core, JWT interno HS256 (segredo compartilhado, TTL curto, distinto do RS256 externo), propagação de `X-Request-Id`/`X-Forwarded-For`, mapeamento de falha de rede para `503 CORE_UNAVAILABLE` e de `401` do Core para `502 CORE_AUTH_MISMATCH`, aquecimento do Core em segundo plano (um por vez, erros engolidos), repasse dos demais erros do Core, geração automática do par RSA em dev.
 - `tests/test_errors_and_seed.py`: contrato `{error:{code,message}}` também em 404/405 de rota desconhecida; seed/bootstrap idempotentes, e-mail normalizado, senha mínima, hash bcrypt.
 
 O workflow de CI do monorepo roda esta suíte em cada push.

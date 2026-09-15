@@ -14,6 +14,7 @@ devolvidas ao cliente como estão. Falhas de rede/timeout viram 503 CORE_UNAVAIL
 """
 from __future__ import annotations
 
+import threading
 from functools import lru_cache
 from typing import Any, Mapping, Optional
 
@@ -33,6 +34,13 @@ log = get_logger(__name__)
 class CoreUnavailableError(AppError):
     status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     code = "CORE_UNAVAILABLE"
+
+
+class CoreAuthMismatchError(AppError):
+    """O Core rejeitou o JWT interno que o próprio Gateway assinou: JWT_SECRET divergente."""
+
+    status_code = status.HTTP_502_BAD_GATEWAY
+    code = "CORE_AUTH_MISMATCH"
 
 
 @lru_cache
@@ -101,6 +109,17 @@ class CoreClient:
                 details={"upstream": "core"},
             ) from exc
 
+        if response.status_code == status.HTTP_401_UNAUTHORIZED:
+            # O token interno é emitido aqui mesmo, então um 401 do Core nunca é "sessão expirada"
+            # do usuário: é configuração (JWT_SECRET diferente entre gateway e core). Repassar o
+            # 401 fazia o painel derrubar a sessão em loop; 502 aponta para a causa real.
+            log.error("core.auth_mismatch", method=method, path=path, upstream_status=401)
+            raise CoreAuthMismatchError(
+                "O Core rejeitou o token interno do Gateway. Confira se JWT_SECRET é o mesmo no gateway e no core "
+                "(ou se os relógios dos dois serviços estão dessincronizados).",
+                details={"upstream": "core", "upstream_status": 401},
+            )
+
         log.info("core.forwarded", method=method, path=path, status_code=response.status_code)
         return response
 
@@ -110,6 +129,51 @@ class CoreClient:
             return r.status_code == 200
         except httpx.HTTPError:
             return False
+
+
+_warmup_lock = threading.Lock()
+_warmup_running = False
+
+
+def warm_up_core(
+    client: Optional[httpx.Client] = None,
+    timeout_seconds: Optional[float] = None,
+) -> Optional[threading.Thread]:
+    """
+    Acorda o Core em segundo plano (fire-and-forget), sem segurar a requisição atual.
+
+    Em free tier (Render) o Core suspende após inatividade e leva 1 a 2 min para voltar; a
+    primeira leitura do painel cairia em 503 CORE_UNAVAILABLE. Disparar um GET /health no boot
+    do Gateway e a cada login faz o Core começar a subir enquanto o painel ainda navega.
+    Só um aquecimento roda por vez. Devolve a thread iniciada, ou None quando não há o que
+    fazer (modo standalone, CORE_WARMUP_SECONDS=0 ou aquecimento já em andamento).
+    """
+    global _warmup_running
+    settings = get_settings()
+    timeout = settings.core_warmup_seconds if timeout_seconds is None else timeout_seconds
+    if timeout <= 0 or (client is None and not settings.core_proxy_enabled):
+        return None
+    with _warmup_lock:
+        if _warmup_running:
+            return None
+        _warmup_running = True
+
+    http = client or _http_client()
+
+    def _run() -> None:
+        global _warmup_running
+        try:
+            r = http.get("/health", timeout=httpx.Timeout(timeout, connect=10.0))
+            log.info("core.warmup", status_code=r.status_code)
+        except httpx.HTTPError as exc:
+            log.warning("core.warmup_failed", error=type(exc).__name__)
+        finally:
+            with _warmup_lock:
+                _warmup_running = False
+
+    thread = threading.Thread(target=_run, name="core-warmup", daemon=True)
+    thread.start()
+    return thread
 
 
 def passthrough(response: httpx.Response) -> Response:

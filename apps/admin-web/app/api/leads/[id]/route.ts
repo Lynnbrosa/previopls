@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { ApiError, forwardingHeaders, patchLead } from '@/lib/api';
+import { ApiError, describeApiError, forwardingHeaders, patchLead } from '@/lib/api';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -28,7 +28,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
         : err.status === 403 ? 'Seu papel não pode alterar leads.'
         : err.status === 404 ? 'Lead não encontrado.'
         : err.status === 429 ? 'Muitas requisições. Aguarde um instante.'
-        : err.status >= 500 ? 'Backend indisponível no momento.'
+        : err.status >= 500 ? describeApiError(err)
         : 'Falha ao atualizar lead.';
       return NextResponse.json({ message }, { status: err.status });
     }

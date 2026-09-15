@@ -1,16 +1,13 @@
-export function BackendError({ message }: { message: string }) {
-  return (
-    <div className="card border-l-4 border-l-red-600">
-      <div className="card-header">
-        <p className="eyebrow">Backend indisponível</p>
-      </div>
-      <div className="card-body space-y-2 text-sm text-slate-700">
-        <p>{message}</p>
-        <p className="text-xs text-slate-500">
-          O painel lê os dados pelo servidor (INTERNAL_GATEWAY_URL). Confira o <code>/health</code> do Gateway e do Core e
-          os logs do container <code>admin-web</code>.
-        </p>
-      </div>
-    </div>
-  );
+import { BackendErrorCard } from '@/components/backend-error-card';
+import { describeApiError, diagnoseBackend, isTransientError } from '@/lib/api';
+
+/**
+ * Card de erro de backend com diagnóstico da cadeia painel → gateway → banco → core.
+ * Server component: consulta /health e /version daqui mesmo (a rede em que a leitura falhou)
+ * e entrega ao card cliente só dados serializáveis. O card tenta de novo sozinho quando o
+ * erro é transitório (backend acordando).
+ */
+export async function BackendError({ error }: { error: unknown }) {
+  const diagnosis = await diagnoseBackend();
+  return <BackendErrorCard message={describeApiError(error)} retryable={isTransientError(error)} diagnosis={diagnosis} />;
 }
