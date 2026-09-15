@@ -26,7 +26,11 @@ Painel de gestão do PrevioPLS, usado pelo gerente de pós-venda da concessioná
 
 O form de login posta para `POST /api/auth/login`, uma route handler do Next.js que chama o backend (`/v1/auth/login`) usando `INTERNAL_GATEWAY_URL`. O painel aceita os dois contratos de resposta (Gateway: `access_token`/`access_expires_in`; Core: `accessToken`/`expiresIn`) e grava o JWT num cookie httpOnly secure (`previopls_jwt`). Erros são traduzidos para o usuário: 401 credenciais/lockout, 429 rate limit do login, 5xx backend indisponível. Páginas protegidas usam o `(app)/layout.tsx`, que redireciona para `/login` quando o cookie não está presente. Logout faz POST em `/api/auth/logout`, que apenas limpa o cookie.
 
-Todo fetch de dados acontece server-side via `lib/api.ts`, que lê o cookie e injeta `Authorization: Bearer ...` nos requests para o backend. O cliente nunca vê o JWT em JavaScript.
+Todo fetch de dados acontece server-side via `lib/api.ts`, que lê o cookie e injeta `Authorization: Bearer ...` nos requests para o backend. O cliente nunca vê o JWT em JavaScript. As route handlers repassam ao backend o IP real do navegador (`X-Real-IP` do nginx/Vercel) e o `X-Request-Id`, para que rate limit, lockout e auditoria do Gateway sejam por usuário e não pelo IP do container.
+
+O cookie de sessão é `Secure` quando a requisição chega por HTTPS (`X-Forwarded-Proto`), que é o caso do nginx e da Vercel. Em `npm run dev` por HTTP (por exemplo `http://<ip-da-lan>:3000`) o cookie fica sem `Secure`, senão o navegador o descarta e o login volta para `/login`.
+
+Atrás do nginx do compose, só `/api/v1/*`, `/api/health`, `/api/docs` e `/api/openapi.json` vão para o Gateway; as route handlers do painel (`/api/auth/*`, `/api/leads/*`) continuam no Next.js.
 
 ## Variáveis de ambiente
 
