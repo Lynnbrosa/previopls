@@ -1,12 +1,16 @@
 import Link from 'next/link';
 import { PerfilPie } from '@/components/perfil-pie';
 import { redirect } from 'next/navigation';
-import { ApiError, describeApiError, listLeads } from '@/lib/api';
+import { ApiError, listLeads } from '@/lib/api';
 import { BackendError } from '@/components/backend-error';
 import { formatPercent } from '@/lib/utils';
 import type { LeadListItem, Prioridade } from '@/types/api';
 
 import { PRIORIDADES, PRIORIDADE_COR, PRIORIDADE_HEX, PRIORIDADE_LABEL } from '@/lib/labels';
+
+// Leituras server-side esperam o backend acordar (free tier). Sem isso a função da Vercel
+// morre em 10 s com 504 sem corpo e o card de diagnóstico nunca aparece.
+export const maxDuration = 60;
 
 interface DashboardStats {
   totalLeads: number;
@@ -36,7 +40,7 @@ export default async function DashboardPage() {
     stats = await loadStats();
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) redirect('/login?motivo=sessao');
-    return <BackendError message={describeApiError(err)} />;
+    return <BackendError error={err} />;
   }
 
   const pieData = PRIORIDADES.map((prioridade) => ({

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { ApiError, describeApiError, listLeads } from '@/lib/api';
+import { ApiError, listLeads } from '@/lib/api';
 import { BackendError } from '@/components/backend-error';
 import { formatDate, formatPercent } from '@/lib/utils';
 
@@ -15,6 +15,10 @@ import {
   STATUS_COR,
   STATUS_LABEL,
 } from '@/lib/labels';
+
+// Leituras server-side esperam o backend acordar (free tier). Sem isso a função da Vercel
+// morre em 10 s com 504 sem corpo e o card de diagnóstico nunca aparece.
+export const maxDuration = 60;
 
 export default async function LeadsPage({
   searchParams,
@@ -34,7 +38,7 @@ export default async function LeadsPage({
     });
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) redirect('/login?motivo=sessao');
-    return <BackendError message={describeApiError(err)} />;
+    return <BackendError error={err} />;
   }
 
   const items = result.items ?? [];

@@ -1,5 +1,6 @@
 import { getSession } from '@/lib/auth';
 import type {
+  BackendDiagnosis,
   LeadDetail,
   LeadListPage,
   LeadPatchRequest,
@@ -11,8 +12,10 @@ import type {
 // Base interna: Gateway (borda LGPD) por padrão. Pode apontar direto ao Core em setups isolados.
 const INTERNAL_BASE = process.env.INTERNAL_GATEWAY_URL ?? 'http://gateway:8000';
 
-// Cabe dentro do maxDuration (60 s) das route handlers; cobre o cold start de free tier.
-const UPSTREAM_TIMEOUT_MS = 55_000;
+// Cabe dentro do maxDuration (60 s) das route handlers e páginas, com folga para o diagnóstico
+// (DIAG_TIMEOUT_MS) rodar depois de uma falha; cobre o cold start do Gateway em free tier.
+const UPSTREAM_TIMEOUT_MS = 50_000;
+const DIAG_TIMEOUT_MS = 5_000;
 
 function buildUrl(path: string): string {
   return `${INTERNAL_BASE.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
@@ -97,14 +100,87 @@ export function describeApiError(err: unknown): string {
     if (err.status === 403) return `Seu papel não tem acesso a este recurso${suffix}.`;
     if (err.status === 404) return `Recurso não encontrado no backend${suffix}.`;
     if (err.status === 429) return `Limite de requisições do backend atingido${suffix}. Aguarde um minuto.`;
-    if (err.code === 'CORE_UNAVAILABLE') return `O Gateway (${backend}) não conseguiu falar com o Core${suffix}. Verifique CORE_API_URL e se o Core está saudável.`;
+    if (err.code === 'CORE_AUTH_MISMATCH') {
+      return `O Gateway (${backend}) autenticou você, mas o Core rejeitou o token interno${suffix}. JWT_SECRET precisa ser o mesmo no gateway e no core; relógios dessincronizados entre os dois também causam isso.`;
+    }
+    if (err.code === 'CORE_UNAVAILABLE') {
+      return `O Gateway (${backend}) não conseguiu falar com o Core${suffix}. Se o Core roda em free tier ele pode estar acordando; o painel tenta de novo sozinho.`;
+    }
     if (err.status >= 500) return `O backend ${backend} respondeu erro${suffix}${err.backendMessage ? `: ${err.backendMessage}` : ''}.`;
     return `Falha ao consultar o backend ${backend}${suffix}${err.backendMessage ? `: ${err.backendMessage}` : ''}.`;
   }
   if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
-    return `O backend ${backend} não respondeu a tempo (pode estar acordando). Tente novamente em alguns segundos.`;
+    return `O backend ${backend} não respondeu a tempo (pode estar acordando). O painel tenta de novo sozinho.`;
   }
   return `Não foi possível conectar ao backend ${backend}. Verifique INTERNAL_GATEWAY_URL e se o serviço está no ar.`;
+}
+
+/** Erros que costumam passar sozinhos (backend acordando, Core reiniciando): o card tenta de novo. */
+export function isTransientError(err: unknown): boolean {
+  if (err instanceof ApiError) {
+    if (err.code === 'CORE_AUTH_MISMATCH') return false; // configuração: insistir não resolve
+    return err.status === 502 || err.status === 503 || err.status === 504;
+  }
+  return true; // rede, DNS, timeout
+}
+
+function errorDetail(reason: unknown): string | null {
+  if (!(reason instanceof Error)) return null;
+  // fetch do Node embrulha o erro de socket em cause (ENOTFOUND, ECONNREFUSED, ECONNRESET...).
+  const cause = (reason as Error & { cause?: { code?: string; message?: string } }).cause;
+  return cause?.code ?? cause?.message ?? reason.message ?? reason.name;
+}
+
+/**
+ * Consulta /health e /version do backend para o card de erro mostrar onde a cadeia quebrou
+ * (painel → gateway → banco → core). Nunca lança: qualquer falha vira 'down' ou 'timeout'.
+ */
+export async function diagnoseBackend(): Promise<BackendDiagnosis> {
+  const diag: BackendDiagnosis = {
+    backend: backendLabel(),
+    defaultBase: !process.env.INTERNAL_GATEWAY_URL,
+    vercel: process.env.VERCEL === '1',
+    gateway: 'down',
+    status: null,
+    components: {},
+    mode: null,
+    version: null,
+    detail: null,
+  };
+  const probe = (path: string) =>
+    fetch(buildUrl(path), {
+      cache: 'no-store',
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(DIAG_TIMEOUT_MS),
+    });
+  const [health, version] = await Promise.allSettled([probe('/health'), probe('/version')]);
+
+  if (health.status === 'fulfilled') {
+    diag.status = health.value.status;
+    const body = (await health.value.json().catch(() => null)) as
+      | { status?: string; mode?: string; components?: Record<string, string> }
+      | null;
+    if (!body) {
+      diag.detail = `GET /health respondeu HTTP ${health.value.status} sem JSON`;
+    } else {
+      diag.components = body.components ?? {};
+      diag.mode = body.mode ?? null;
+      if (body.status === 'degraded' || health.value.status === 503) diag.gateway = 'degraded';
+      else if (health.value.ok) diag.gateway = 'up';
+    }
+  } else {
+    const reason: unknown = health.reason;
+    const timedOut = reason instanceof Error && (reason.name === 'TimeoutError' || reason.name === 'AbortError');
+    diag.gateway = timedOut ? 'timeout' : 'down';
+    diag.detail = errorDetail(reason);
+  }
+
+  if (version.status === 'fulfilled' && version.value.ok) {
+    const v = (await version.value.json().catch(() => null)) as { version?: string; mode?: string } | null;
+    diag.version = v?.version ?? null;
+    diag.mode = diag.mode ?? v?.mode ?? null;
+  }
+  return diag;
 }
 
 export async function login(payload: LoginRequest, extraHeaders: Record<string, string> = {}): Promise<LoginResponse> {
