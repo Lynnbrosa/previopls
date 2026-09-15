@@ -1,8 +1,3 @@
-Nomes e RMs,
-Giovanne Charelli Zaniboni Silva | 556223 
-Leonardo Pasquini Baldaia | 557416 
-Gustavo Oliveira de Moura | 555827 
-Lynn Bueno Rosa | 551102
 # PrevioPLS — IA/ML
 
 Disciplina **Inteligência Artificial & Machine Learning** da challenge Ford FIAP 2026. Entrega: notebook Jupyter completo de segmentação não-supervisionada (Base 1) + classificação supervisionada D0 (Base 2) com verificação anti data leakage.
