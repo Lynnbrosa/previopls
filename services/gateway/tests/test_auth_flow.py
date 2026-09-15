@@ -103,3 +103,14 @@ def test_forged_long_forwarded_ip_is_truncated_to_column_size():
         AuthService(db).login("nobody@ford.com", "senha-errada", _Req())
     attempt = next(o for o in db.added if isinstance(o, LoginAttempt))
     assert len(attempt.remote_ip) == MAX_IP_LENGTH
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("postgres://u:p@host/db?sslmode=require", "postgresql+psycopg://u:p@host/db?sslmode=require"),
+    ("postgresql://u:p@host/db", "postgresql+psycopg://u:p@host/db"),
+    ("postgresql+psycopg://u:p@host/db", "postgresql+psycopg://u:p@host/db"),
+    ("  postgresql+psycopg://u:p@host/db  ", "postgresql+psycopg://u:p@host/db"),
+])
+def test_database_url_is_normalized_to_psycopg_dialect(raw, expected):
+    s = Settings(database_url=raw, fernet_key="x" * 44, cpf_hash_pepper="p" * 32, hmac_payload_secret="h" * 32)
+    assert s.database_url == expected

@@ -18,7 +18,7 @@ Edge de segurança LGPD do PrevioPLS. Único serviço Render exposto publicament
 | Var                     | Valor                                                                 |
 |-------------------------|------------------------------------------------------------------------|
 | `APP_ENV`               | `production` (desliga `/docs`, exige chaves RSA presentes, não cria usuários seed) |
-| `DATABASE_URL`          | `postgresql+psycopg://<user>:<pass>@<neon-host>/previopls_gateway?sslmode=require` |
+| `DATABASE_URL`          | `postgresql+psycopg://<user>:<pass>@<neon-host>/previopls_gateway?sslmode=require` (a string `postgresql://` copiada do Neon também é aceita) |
 | `CORE_API_URL`          | URL interna do core na Render (`https://previopls-core.onrender.com`) — ativa o modo proxy |
 | `JWT_SECRET`            | o mesmo segredo HS256 configurado no core (assina o JWT interno por requisição) |
 | `SEED_DEFAULT_USERS`    | `false` (`true` só em demo: cria admin@ford.com/admin123 etc.)       |

@@ -30,6 +30,10 @@ A suspensão da Render no plano free é aceitável para o piloto (primeira reque
 
 Railway não oferece tier 100% gratuito permanente sem cartão. Cobra a partir de um pequeno crédito mensal. Para esta avaliação (Ford lê o repositório e pode subir uma demo sem se comprometer com cobrança), Vercel + Render + Neon entrega o mesmo resultado com zero custo.
 
+## Branch de deploy
+
+Todos os serviços (Vercel e Render) devem fazer deploy da branch padrão do repositório, `feat/monorepo-consolidation`. Um serviço preso em `main` continua rodando o código antigo: painel que mostra "Credenciais inválidas" para qualquer erro, gateway sem repasse ao core e sem usuários. Confira em cada painel antes de investigar qualquer outro problema.
+
 ## Sequência de provisionamento
 
 1. Criar o projeto no Neon. Criar duas bases: `previopls_core` e `previopls_gateway`. Anotar a connection string de cada uma.

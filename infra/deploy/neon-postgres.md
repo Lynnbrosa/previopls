@@ -25,7 +25,8 @@ Banco gerenciado serverless, plano free. Duas bases isoladas para Core e Gateway
 
    Repetir para `previopls_gateway_app` na base `previopls_gateway`.
 
-6. Anotar as connection strings de cada base (formato `postgresql://user:pass@host/db?sslmode=require`).
+6. Ainda como `neon_superuser`, na base `previopls_core`: `CREATE EXTENSION IF NOT EXISTS pgcrypto;`. A migration `V1` do Core executa esse comando e uma role de aplicação sem privilégio não consegue instalar extensões; criando antes, o `IF NOT EXISTS` passa. O Gateway não precisa de extensão.
+7. Anotar as connection strings de cada base (formato `postgresql://user:pass@host/db?sslmode=require`). O Gateway aceita `postgres://`, `postgresql://` ou `postgresql+psycopg://` e normaliza para o driver instalado; o Core precisa do prefixo `jdbc:`.
 
 ## Branching
 
