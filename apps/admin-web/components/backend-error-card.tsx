@@ -100,15 +100,22 @@ export function BackendErrorCard({
   }
 
   const core = diagnosis.components.core;
+  // O /health e o /version do Gateway sempre trazem "mode"; os do Core nunca. Sem "mode" e com
+  // resposta, INTERNAL_GATEWAY_URL aponta direto para o Core (setup isolado) e não há elo Gateway → Core.
+  const viaGateway = diagnosis.gateway === 'down' || diagnosis.gateway === 'timeout' || diagnosis.mode !== null;
+  const host = viaGateway ? 'Gateway' : 'Backend';
   const rows: { label: string; value: string; state?: string }[] = [
-    { label: 'Painel → Gateway', value: diagnosis.backend, state: diagnosis.gateway },
-    { label: 'Gateway → Banco', value: 'Postgres do Gateway', state: diagnosis.components.database },
-    {
+    { label: `Painel → ${host}`, value: diagnosis.backend, state: diagnosis.gateway },
+    { label: `${host} → Banco`, value: `Postgres do ${host}`, state: diagnosis.components.database },
+  ];
+  if (viaGateway) {
+    rows.push({
       label: 'Gateway → Core',
       value: core ? 'serviço de domínio (CORE_API_URL)' : diagnosis.mode === 'standalone' ? 'não usado (modo standalone)' : 'serviço de domínio',
       state: core ?? (diagnosis.mode === 'standalone' ? 'ok' : undefined),
-    },
-  ];
+    });
+  }
+  const versionLabel = diagnosis.version ? (diagnosis.version.startsWith('v') ? diagnosis.version : `v${diagnosis.version}`) : '';
   const tips = hintsFor(diagnosis);
 
   return (
@@ -123,7 +130,7 @@ export function BackendErrorCard({
               Nova tentativa em {seconds} s{attempts > 0 ? ` · ${attempts} até agora` : ''}
             </span>
           ) : attempts > 0 ? (
-            <span>{attempts} tentativas</span>
+            <span>{attempts} {attempts === 1 ? 'tentativa' : 'tentativas'}</span>
           ) : null}
           <button type="button" onClick={retryNow} disabled={isPending} className="btn-secondary px-4 py-2">
             {isPending ? 'Aguarde…' : 'Tentar novamente'}
@@ -150,7 +157,7 @@ export function BackendErrorCard({
           </ul>
           {(diagnosis.version || diagnosis.mode || diagnosis.status) && (
             <p className="mt-2 text-xs text-slate-500">
-              Gateway{diagnosis.version ? ` v${diagnosis.version}` : ''}
+              {host}{versionLabel ? ` ${versionLabel}` : ''}
               {diagnosis.mode ? ` · modo ${diagnosis.mode}` : ''}
               {diagnosis.status ? ` · /health HTTP ${diagnosis.status}` : ''}
             </p>
