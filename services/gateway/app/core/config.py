@@ -52,6 +52,13 @@ class Settings(BaseSettings):
     # Default: apenas fora de produção.
     seed_default_users: Optional[bool] = None
 
+    # Primeiro administrador em produção (o Gateway não tem endpoint de gestão de
+    # usuários). Com os dois definidos, o usuário é criado no boot se não existir;
+    # a senha só é aplicada na criação. Para outros usuários: python -m app.db.seed --help
+    bootstrap_admin_email: str = ""
+    bootstrap_admin_password: str = ""
+    bootstrap_admin_name: str = "Administrador"
+
     cors_origins: str = ""
     rate_limit_global: str = "100/minute"
     rate_limit_login: str = "5/minute"
