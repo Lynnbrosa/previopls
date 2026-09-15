@@ -35,14 +35,14 @@ Railway não oferece tier 100% gratuito permanente sem cartão. Cobra a partir d
 1. Criar o projeto no Neon. Criar duas bases: `previopls_core` e `previopls_gateway`. Anotar a connection string de cada uma.
 2. Subir o ml-api no Render (web service via Dockerfile). Não expor publicamente.
 3. Subir o core no Render. Apontar `DATABASE_URL` para a base `previopls_core` no Neon. Apontar `ML_API_URL` para a URL interna do ml-api.
-4. Subir o gateway no Render. Apontar `DATABASE_URL` para `previopls_gateway`. Expor publicamente como `api.previopls.com.br`.
-5. Importar o admin-web no Vercel. Setar `INTERNAL_GATEWAY_URL` e `NEXT_PUBLIC_API_URL`. Mapear o domínio `app.previopls.com.br`.
+4. Subir o gateway no Render. Apontar `DATABASE_URL` para `previopls_gateway`, `CORE_API_URL` para a URL interna do core e `JWT_SECRET` para o mesmo valor do core. Expor publicamente como `api.previopls.com.br`. As migrations rodam no boot.
+5. Importar o admin-web no Vercel. Setar `INTERNAL_GATEWAY_URL` (URL do gateway) e `NEXT_PUBLIC_API_URL`. Mapear o domínio `app.previopls.com.br`.
 
 ## Variáveis compartilhadas entre serviços
 
 Vivem em escopo de projeto e cada serviço referencia, evitando duplicação:
 
-- `JWT_SECRET` (32 bytes mínimo).
+- `JWT_SECRET` (32 bytes mínimo; o Gateway assina com ele o JWT interno HS256 que o Core valida).
 - `APP_CRYPTO_KEY` (base64 de 32 bytes, AES do Core).
 - `FERNET_KEY` (chave Fernet do Gateway).
 - `HMAC_PAYLOAD_SECRET` (assinatura do webhook de faturamento).

@@ -17,14 +17,17 @@ Edge de segurança LGPD do PrevioPLS. Único serviço Render exposto publicament
 
 | Var                     | Valor                                                                 |
 |-------------------------|------------------------------------------------------------------------|
-| `APP_ENV`               | `production`                                                          |
+| `APP_ENV`               | `production` (desliga `/docs`, exige chaves RSA presentes, não cria usuários seed) |
 | `DATABASE_URL`          | `postgresql+psycopg://<user>:<pass>@<neon-host>/previopls_gateway?sslmode=require` |
+| `CORE_API_URL`          | URL interna do core na Render (`https://previopls-core.onrender.com`) — ativa o modo proxy |
+| `JWT_SECRET`            | o mesmo segredo HS256 configurado no core (assina o JWT interno por requisição) |
+| `SEED_DEFAULT_USERS`    | `false` (crie os usuários reais via SQL/Alembic; `true` só em demo)  |
+| `JWT_AUTO_GENERATE_KEYS`| `false` (chaves vêm de Secret Files)                                  |
 | `FERNET_KEY`            | gerado uma vez, mesmo valor em todos os ambientes                     |
 | `CPF_HASH_PEPPER`       | 32 bytes aleatórios                                                   |
 | `HMAC_PAYLOAD_SECRET`   | 32 bytes aleatórios                                                   |
 | `JWT_PRIVATE_KEY_PATH`  | `/app/keys/jwt_private.pem`                                          |
 | `JWT_PUBLIC_KEY_PATH`   | `/app/keys/jwt_public.pem`                                           |
-| `CORE_API_URL`          | URL interna do core na Render (`https://previopls-core.onrender.com`) |
 | `LOG_LEVEL`             | `INFO`                                                                |
 
 As chaves RSA do JWT precisam ser materializadas no container. No piloto, gere com `services/gateway/scripts/gen_rsa_keys.sh` e suba via Render Secret Files (Settings → Secret Files), mountando em `/app/keys/jwt_private.pem` e `/app/keys/jwt_public.pem`. Em produção, mova para KMS gerenciado.
@@ -33,9 +36,13 @@ As chaves RSA do JWT precisam ser materializadas no container. No piloto, gere c
 
 `api.previopls.com.br`. Settings → Custom Domains. Render gera o certificado TLS via Let's Encrypt.
 
+## Migrations e boot
+
+O entrypoint do container espera o banco, roda `alembic upgrade head` e só então sobe o uvicorn. Não há passo manual de migration. Em produção o boot falha se as chaves RSA não estiverem montadas (nenhuma chave é gerada automaticamente com `APP_ENV=production`).
+
 ## Health check
 
-O Dockerfile do gateway já define `HEALTHCHECK` (curl em `/health`). Render usa o mesmo path por configuração.
+O Dockerfile do gateway já define `HEALTHCHECK` (curl em `/health`). Render usa o mesmo path por configuração. O corpo reporta `components.database` e `components.core`.
 
 ## Limitações do plano free
 

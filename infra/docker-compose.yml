@@ -1,11 +1,25 @@
 name: previopls
 
+# Stack local completa. Sobe sem passos manuais:
+#   docker compose -f infra/docker-compose.yml up --build
+#
+# - certgen gera o certificado TLS self-signed do nginx num volume (uma vez).
+# - gateway gera o par RSA do JWT (dev) num volume, aplica as migrations
+#   (alembic) no boot e cria os usuários padrão (admin/consultor/analista).
+# - core aplica Flyway (V1..V3, seed de 300 clientes / 93 leads) e cria
+#   admin@ford.com / consultor@ford.com.
+# - admin-web fala com o gateway (borda LGPD), que repassa ao core.
+#
+# Segredos: copie .env.example para .env para trocar os defaults de dev.
+
 networks:
   previopls:
     driver: bridge
 
 volumes:
   pgdata:
+  nginx_certs:
+  gateway_keys:
 
 services:
   postgres:
@@ -15,7 +29,7 @@ services:
     networks: [previopls]
     environment:
       POSTGRES_USER: previopls
-      POSTGRES_PASSWORD: previopls
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-previopls}
       POSTGRES_DB: previopls
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -25,6 +39,29 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Gera dev.crt/dev.key self-signed no volume nginx_certs se ainda não existirem.
+  # Para usar um certificado próprio, substitua os arquivos no volume ou monte
+  # um diretório no lugar de nginx_certs no serviço nginx.
+  certgen:
+    image: alpine/openssl:3.3.2
+    container_name: previopls-certgen
+    networks: [previopls]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        if [ -f /certs/dev.crt ] && [ -f /certs/dev.key ]; then
+          echo "certgen: certificado já existe, mantendo"; exit 0
+        fi
+        openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+          -keyout /certs/dev.key -out /certs/dev.crt \
+          -subj "/C=BR/ST=SP/L=Sao Paulo/O=PrevioPLS Dev/CN=localhost" \
+          -addext "subjectAltName=DNS:localhost,DNS:previopls.local,IP:127.0.0.1"
+        chmod 644 /certs/dev.crt /certs/dev.key
+        echo "certgen: certificado self-signed gerado (aceite o aviso do navegador em dev)"
+    volumes:
+      - nginx_certs:/certs
 
   ml-api:
     build:
@@ -55,10 +92,11 @@ services:
     environment:
       DATABASE_URL: jdbc:postgresql://postgres:5432/previopls_core
       DB_USERNAME: previopls
-      DB_PASSWORD: previopls
-      JWT_SECRET: dev-only-change-me-this-key-must-be-at-least-32-bytes-long
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-previopls}
+      # Segredo HS256 compartilhado com o gateway (JWT interno, ADR-003).
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-this-key-must-be-at-least-32-bytes-long}
       JWT_EXPIRATION_HOURS: "8"
-      APP_CRYPTO_KEY: cHJldmlvcGxzLWRldi1rZXktMzItYnl0ZXMtWFhYWFg=
+      APP_CRYPTO_KEY: ${APP_CRYPTO_KEY:-cHJldmlvcGxzLWRldi1rZXktMzItYnl0ZXMtWFhYWFg=}
       ML_API_URL: http://ml-api:8000
       CORS_ORIGINS: https://localhost,http://localhost:3000,http://localhost:8081,http://localhost:19006
       LOCKOUT_MAX_ATTEMPTS: "5"
@@ -72,12 +110,16 @@ services:
         condition: service_healthy
     expose:
       - "5000"
+    # O app mobile do consultor (Expo) fala direto com o Core em dev.
+    # Comente se não quiser a porta exposta no host.
+    ports:
+      - "5000:5000"
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:5000/health || exit 1"]
       interval: 20s
       timeout: 5s
       retries: 6
-      start_period: 30s
+      start_period: 40s
 
   gateway:
     build:
@@ -88,16 +130,24 @@ services:
     networks: [previopls]
     environment:
       APP_ENV: development
-      DATABASE_URL: postgresql+psycopg://previopls:previopls@postgres:5432/previopls_gateway
+      # nginx remove o prefixo /api; ROOT_PATH mantém /docs e /openapi.json corretos.
+      ROOT_PATH: /api
+      DATABASE_URL: postgresql+psycopg://previopls:${POSTGRES_PASSWORD:-previopls}@postgres:5432/previopls_gateway
       JWT_PRIVATE_KEY_PATH: /app/keys/jwt_private.pem
       JWT_PUBLIC_KEY_PATH: /app/keys/jwt_public.pem
+      # Em dev o par RSA é gerado no primeiro boot dentro do volume gateway_keys.
+      JWT_AUTO_GENERATE_KEYS: "true"
       FERNET_KEY: ${FERNET_KEY:-bV9Wt8aLkV3jH2KqXoXBb1nDmYsP7vZbMHRR9G8u3jQ=}
       CPF_HASH_PEPPER: ${CPF_HASH_PEPPER:-change-me-cpf-hash-pepper-min-32-bytes-long}
       HMAC_PAYLOAD_SECRET: ${HMAC_PAYLOAD_SECRET:-change-me-hmac-payload-secret-min-32-bytes}
+      # Modo proxy (ADR-001): domínio no Core, JWT interno HS256 assinado com JWT_SECRET.
       CORE_API_URL: http://core:5000
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-this-key-must-be-at-least-32-bytes-long}
+      SEED_DEFAULT_USERS: "true"
+      CORS_ORIGINS: https://localhost,http://localhost:3000
       LOG_LEVEL: INFO
     volumes:
-      - ../services/gateway/keys:/app/keys:ro
+      - gateway_keys:/app/keys
     depends_on:
       postgres:
         condition: service_healthy
@@ -110,6 +160,7 @@ services:
       interval: 20s
       timeout: 5s
       retries: 5
+      start_period: 20s
 
   admin-web:
     build:
@@ -121,13 +172,11 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: https://localhost
       NODE_ENV: production
-      # Ponto interno onde o admin-web busca dados. Para o demo unificado aponta
-      # ao Core, que traz o seed de usuários (DataSeeder) e os 300 clientes / 93
-      # leads do V3__seed_real_data.sql. Em produção isso passará a apontar ao
-      # Gateway uma vez que o proxy de borda esteja wired (ver ADR-001).
-      INTERNAL_GATEWAY_URL: http://core:5000
+      # Server components / API routes do Next.js falam com o Gateway (borda LGPD),
+      # que autentica (RS256) e repassa ao Core (HS256 interno). Ver ADR-001.
+      INTERNAL_GATEWAY_URL: http://gateway:8000
     depends_on:
-      core:
+      gateway:
         condition: service_healthy
     expose:
       - "3000"
@@ -142,8 +191,10 @@ services:
       - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ../services/gateway/nginx/certs:/etc/nginx/certs:ro
+      - nginx_certs:/etc/nginx/certs:ro
     depends_on:
+      certgen:
+        condition: service_completed_successfully
       gateway:
         condition: service_healthy
       admin-web:
