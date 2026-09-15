@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { STATUS_LABEL } from '@/lib/labels';
 import type { StatusLead } from '@/types/api';
 
 const ACTIONS: { status: StatusLead; label: string; tone: string }[] = [
@@ -39,7 +40,7 @@ export function LeadActions({ leadId, currentStatus }: { leadId: string; current
   if (currentStatus !== 'aberto') {
     return (
       <p className="text-sm text-slate-500">
-        Este lead já foi marcado como <span className="font-medium">{currentStatus}</span>. Nenhuma ação pendente.
+        Este lead já foi marcado como <span className="font-medium">{STATUS_LABEL[currentStatus]}</span>. Nenhuma ação pendente.
       </p>
     );
   }

@@ -55,6 +55,20 @@ def _body(code: str, message: str, details: Any = None) -> dict:
     return payload
 
 
+_STATUS_CODES = {
+    status.HTTP_400_BAD_REQUEST: "BAD_REQUEST",
+    status.HTTP_401_UNAUTHORIZED: "UNAUTHORIZED",
+    status.HTTP_403_FORBIDDEN: "FORBIDDEN",
+    status.HTTP_404_NOT_FOUND: "NOT_FOUND",
+    status.HTTP_405_METHOD_NOT_ALLOWED: "METHOD_NOT_ALLOWED",
+    status.HTTP_409_CONFLICT: "CONFLICT",
+    status.HTTP_422_UNPROCESSABLE_ENTITY: "VALIDATION_ERROR",
+    status.HTTP_429_TOO_MANY_REQUESTS: "RATE_LIMIT_EXCEEDED",
+    status.HTTP_502_BAD_GATEWAY: "UPSTREAM_ERROR",
+    status.HTTP_503_SERVICE_UNAVAILABLE: "SERVICE_UNAVAILABLE",
+}
+
+
 def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(AppError)
@@ -63,14 +77,17 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(HTTPException)
     async def handle_http(_request: Request, exc: HTTPException):
+        default_code = _STATUS_CODES.get(exc.status_code, "HTTP_ERROR")
+        headers = getattr(exc, "headers", None)
         if isinstance(exc.detail, dict):
-            return JSONResponse(
-                status_code=exc.status_code,
-                content=_body("HTTP_ERROR", exc.detail.get("message", "Erro"), exc.detail),
-            )
+            code = str(exc.detail.get("code") or default_code)
+            message = str(exc.detail.get("message") or "Erro")
+            details = {k: v for k, v in exc.detail.items() if k not in ("code", "message")} or None
+            return JSONResponse(status_code=exc.status_code, content=_body(code, message, details), headers=headers)
         return JSONResponse(
             status_code=exc.status_code,
-            content=_body("HTTP_ERROR", str(exc.detail)),
+            content=_body(default_code, str(exc.detail)),
+            headers=headers,
         )
 
     @app.exception_handler(RequestValidationError)

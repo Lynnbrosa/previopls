@@ -14,10 +14,13 @@ Stakeholders:
 Arquitetura (camadas atacáveis):
 
 ```
-Internet → nginx (TLS 1.2+) → FastAPI (Python) → PostgreSQL
+Internet → nginx (TLS 1.2+) → FastAPI (Python) → PostgreSQL (usuários, sessões, audit)
                                   │
+                                  ├─→ Core Spring Boot (JWT interno HS256, 60 s) → PostgreSQL (domínio, PII AES-256-GCM) → ml-api
                                   └─→ Provedor LLM externo (via /v1/llm-assist)
 ```
+
+O hop FastAPI → Core é a fronteira interna: o token externo RS256 nunca atravessa, o Gateway assina um JWT HS256 por requisição com o `JWT_SECRET` compartilhado e propaga `X-Request-Id` / `X-Forwarded-For` para a trilha do Core. Falha do Core vira `503 CORE_UNAVAILABLE` sem stack trace.
 
 ---
 

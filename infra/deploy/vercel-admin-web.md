@@ -19,7 +19,7 @@ Painel Next.js do PrevioPLS. Plano Hobby (free) cobre tudo que o piloto precisa.
 | `INTERNAL_GATEWAY_URL` | URL interna do Gateway no Render (`https://previopls-gateway.onrender.com`) |
 | `NODE_ENV`             | `production` (Vercel define sozinho)                          |
 
-Em piloto, antes do Gateway estar exposto publicamente, aponte `INTERNAL_GATEWAY_URL` para a URL do serviço `core` na Render (`https://previopls-core.onrender.com`) para reutilizar o seed real (300 clientes, 93 leads). Decisão temporária explicada em [`apps/admin-web/README.md`](../../apps/admin-web/README.md).
+O painel autentica no Gateway (JWT RS256) e o Gateway repassa as leituras/escritas de leads ao Core com o JWT interno HS256, então o seed real (300 clientes, 93 leads) aparece no painel sem apontar para o Core. Se precisar de um setup isolado sem Gateway, `INTERNAL_GATEWAY_URL` também aceita a URL do Core: o painel entende os dois contratos de login (ver [`apps/admin-web/README.md`](../../apps/admin-web/README.md)).
 
 ## Domínio público
 

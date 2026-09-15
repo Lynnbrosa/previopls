@@ -1,11 +1,15 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, Numeric, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.db.session import Base
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class Veiculo(Base):
@@ -23,7 +27,7 @@ class Veiculo(Base):
     data_compra = Column(Date, nullable=False)
     valor_compra = Column(Numeric(12, 2), nullable=False)
     concessionaria_id = Column(String(40), nullable=False, index=True)
-    criado_em = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    criado_em = Column(DateTime(timezone=True), default=_now, nullable=False)
 
     cliente = relationship("Cliente", back_populates="veiculos")
     leads = relationship("Lead", back_populates="veiculo")

@@ -36,9 +36,9 @@ export const STATUS_LABEL: Record<StatusLead, string> = {
 };
 
 /**
- * Inferência de perfil a partir do score quando o endpoint de lista
- * só retorna o score (e não o perfil do cliente).
- * Cortes idênticos aos buckets do MlService.classificar no backend.
+ * Fallback: inferência de perfil a partir do score quando o backend não
+ * devolve `perfil` no item da lista (versões antigas do Core).
+ * O Core atual já envia o perfil classificado pelo ml-api; prefira-o.
  */
 export function perfilFromScore(score: number): PerfilCliente {
   if (score >= 0.78) return 'abandono';

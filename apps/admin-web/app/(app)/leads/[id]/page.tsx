@@ -3,20 +3,7 @@ import { notFound } from 'next/navigation';
 import { LeadActions } from '@/components/lead-actions';
 import { ApiError, getLead } from '@/lib/api';
 import { formatCurrency, formatDate, formatDateTime, formatPercent } from '@/lib/utils';
-import type { Perfil, Prioridade } from '@/types/api';
-
-const PERFIL_COR: Record<Perfil, string> = {
-  FIEL: 'bg-blue-100 text-blue-800',
-  ABANDONO: 'bg-red-100 text-red-800',
-  ESQUECIDO: 'bg-amber-100 text-amber-800',
-  ECONOMICO: 'bg-teal-100 text-teal-800',
-};
-const PRIORIDADE_COR: Record<Prioridade, string> = {
-  CRITICA: 'bg-red-600 text-white',
-  ALTA: 'bg-orange-500 text-white',
-  MEDIA: 'bg-yellow-500 text-white',
-  BAIXA: 'bg-slate-300 text-slate-700',
-};
+import { PERFIL_COR, PERFIL_LABEL, PRIORIDADE_COR, PRIORIDADE_LABEL, STATUS_LABEL } from '@/lib/labels';
 
 export default async function LeadDetailPage({ params }: { params: { id: string } }) {
   let lead;
@@ -44,11 +31,14 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
           {lead.veiculo.concessionariaId}
         </p>
         <div className="mt-6 flex flex-wrap items-center gap-2">
-          <span className={`rounded-full px-3 py-1 text-xs font-medium ${PERFIL_COR[(lead.cliente.perfil ?? 'ESQUECIDO') as Perfil]}`}>
-            {lead.cliente.perfil ?? 'sem perfil'}
+          <span className={`rounded-full px-3 py-1 text-xs font-medium ${lead.cliente.perfil ? PERFIL_COR[lead.cliente.perfil] : 'bg-slate-100 text-slate-600'}`}>
+            {lead.cliente.perfil ? PERFIL_LABEL[lead.cliente.perfil] : 'sem perfil'}
           </span>
           <span className={`rounded-full px-3 py-1 text-xs font-semibold ${PRIORIDADE_COR[lead.prioridade]}`}>
-            {lead.prioridade}
+            {PRIORIDADE_LABEL[lead.prioridade]}
+          </span>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+            {STATUS_LABEL[lead.status]}
           </span>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
             Score {formatPercent(lead.scoreRisco)}

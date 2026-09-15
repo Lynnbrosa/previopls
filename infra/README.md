@@ -5,65 +5,107 @@ Orquestração local e specs de deploy do PrevioPLS.
 ## Subir a stack completa
 
 ```bash
-# A partir da raiz do monorepo, gerar segredos do Gateway uma única vez:
-cd services/gateway
-chmod +x scripts/*.sh
-./scripts/gen_rsa_keys.sh           # keys/jwt_private.pem + keys/jwt_public.pem
-./scripts/gen_self_signed_cert.sh   # nginx/certs/dev.{crt,key}
-python scripts/gen_fernet_key.py    # imprime a FERNET_KEY (copie para infra/.env)
-
-cd ../../infra
-cp .env.example .env                # opcional: ajustar segredos
-docker compose up --build
+docker compose -f infra/docker-compose.yml up --build
 ```
 
-A stack expõe apenas o nginx em `80` e `443`. As demais portas (`5000` core, `8000` gateway, `8000` ml-api, `3000` admin-web) ficam restritas à rede interna `previopls`.
+Não há passos manuais. No primeiro boot:
+
+- `certgen` gera um certificado TLS self-signed no volume `nginx_certs` (só uma vez; aceite o aviso do navegador em dev).
+- `core` aplica as migrations Flyway (`V1` schema, `V2` hardening, `V3` seed com 300 clientes / 93 leads) e cria `admin@ford.com` e `consultor@ford.com`.
+- `gateway` espera o banco, aplica as migrations Alembic, gera o par RSA de desenvolvimento no volume `gateway_keys` e cria `admin@ford.com`, `consultor@ford.com` e `analista@ford.com`.
+- `ml-api` já vem com um modelo padrão gerado no build da imagem (validado contra features pós-venda no boot).
+
+Para trocar os segredos de desenvolvimento: `cp infra/.env.example infra/.env` e edite. Os defaults do compose bastam para a demo local; nunca use-os fora da sua máquina.
+
+Portas no host: `80` e `443` (nginx) e `127.0.0.1:5000` (Core, apenas para o app mobile em dev; remova `ports` do serviço `core` se não precisar). Os demais serviços ficam restritos à rede interna `previopls`.
 
 ## Rotas no nginx
 
-| Caminho público                  | Destino                       |
-|----------------------------------|-------------------------------|
-| `https://localhost/api/v1/*`     | Gateway FastAPI (strip `/api`)|
-| `https://localhost/api/health`   | Gateway `/health`             |
-| `https://localhost/*`            | Admin Web Next.js             |
+| Caminho público                  | Destino                             | Observação                              |
+|----------------------------------|-------------------------------------|------------------------------------------|
+| `https://localhost/api/v1/*`     | Gateway FastAPI (remove o `/api`)   | `/api/v1/auth/login` limitado a 5 req/min |
+| `https://localhost/api/health`   | Gateway `/health`                   | reporta `database` e `core`              |
+| `https://localhost/api/docs`     | Gateway `/docs` (Swagger)           | apenas em dev (`APP_ENV != production`)  |
+| `https://localhost/*`            | Admin Web Next.js                   |                                          |
 
-O app mobile do consultor não passa pelo nginx no compose local; ele conecta direto no Core via `EXPO_PUBLIC_API_URL` (ver [`apps/consultor-mobile/README.md`](../apps/consultor-mobile/README.md)).
+O admin-web fala com o Gateway pela rede interna (`INTERNAL_GATEWAY_URL=http://gateway:8000`). O Gateway autentica (JWT RS256) e repassa ao Core com um JWT interno HS256 (ADR-001/ADR-003). O app mobile do consultor conecta direto no Core via `EXPO_PUBLIC_API_URL` (ver [`apps/consultor-mobile/README.md`](../apps/consultor-mobile/README.md)).
 
 ## Bancos de dados
 
 Um único `postgres:16-alpine` hospeda duas bases criadas pelo [`init.sql`](postgres/init.sql):
 
-- `previopls_core`: usado pelo Core (Flyway aplica `V1__initial_schema.sql`, `V2__security_hardening.sql`, `V3__seed_real_data.sql`).
-- `previopls_gateway`: usado pelo Gateway (Alembic gerencia o schema).
+- `previopls_core`: usado pelo Core (Flyway).
+- `previopls_gateway`: usado pelo Gateway (Alembic). No modo proxy guarda apenas usuários, refresh tokens, tentativas de login e `audit_logs`; as tabelas de domínio existem para o modo standalone.
 
-Os schemas são parecidos por desenho, ver [`ARCHITECTURE.md`](../ARCHITECTURE.md) seção 6 (ADR-001). A separação física por database evita colisão de nomes de tabelas e permite migrar para clusters distintos sem refatoração.
+A separação física por database evita colisão de nomes de tabelas e permite migrar para clusters distintos sem refatoração (ver [`ARCHITECTURE.md`](../ARCHITECTURE.md), ADR-001).
 
-## Dockerfiles
+## Variáveis compartilhadas
 
-- `services/gateway/Dockerfile`: usado tal qual está no subtree.
-- `services/ml/api/Dockerfile`: criado na Fase 4 (este monorepo).
-- `services/core/Dockerfile`: build multi-stage Maven + JRE 21. Adicionado ao serviço Core para que o compose e plataformas de deploy (Render, Vercel) detectem automaticamente.
-- `apps/admin-web/Dockerfile`: criado na Fase 5 (Next.js standalone).
+| Variável              | Quem usa            | Para quê                                                        |
+|-----------------------|---------------------|-----------------------------------------------------------------|
+| `JWT_SECRET`          | core, gateway       | HS256: o Core valida os tokens que ele mesmo emite e os tokens internos que o Gateway assina por requisição |
+| `APP_CRYPTO_KEY`      | core, build_seed.py | AES-256-GCM da PII em repouso. O seed `V3` foi cifrado com a chave dev; ao trocar, regenere o seed |
+| `HMAC_PAYLOAD_SECRET` | gateway, faturamento| assinatura `X-Signature` do `POST /api/v1/clientes`             |
+| `FERNET_KEY`, `CPF_HASH_PEPPER` | gateway   | criptografia e lookup de PII no modo standalone                 |
+| `POSTGRES_PASSWORD`   | postgres, core, gateway | senha do usuário `previopls`                                |
 
 ## Healthchecks e ordem de boot
 
-O `depends_on` com `condition: service_healthy` garante a ordem:
+O `depends_on` com `condition` garante a ordem:
 
-1. `postgres` (espera `pg_isready`).
-2. `ml-api` (espera resposta 200 em `/health`).
-3. `core` (espera após postgres + ml-api).
-4. `gateway` (espera após postgres + core).
-5. `admin-web` (espera gateway saudável).
-6. `nginx` (sobe assim que gateway e admin-web estão prontos).
+1. `postgres` (espera `pg_isready`) e `certgen` (termina com sucesso).
+2. `ml-api` (espera 200 em `/health`).
+3. `core` (após postgres + ml-api; `start_period` de 40 s para a JVM).
+4. `gateway` (após postgres + core; `/health` só fica `ok` com banco e core `up`).
+5. `admin-web` (após gateway saudável).
+6. `nginx` (após certgen, gateway e admin-web).
 
-## Subir um serviço isolado
+## Dockerfiles
 
-Cada serviço continua tendo seu próprio fluxo. Veja os READMEs:
+- `services/gateway/Dockerfile`: entrypoint espera o banco, roda `alembic upgrade head` e sobe o uvicorn. Diretório `/app/keys` pertence ao usuário `app` para o volume de chaves.
+- `services/ml/api/Dockerfile`: gera `models/ml_model.pkl` sintético no build se não houver um pkl real na pasta.
+- `services/core/Dockerfile`: build multi-stage Maven + JRE 21, `MaxRAMPercentage=75`.
+- `apps/admin-web/Dockerfile`: Next.js `output: standalone` (`node server.js`).
 
-- [`services/gateway/README.md`](../services/gateway/README.md): `docker compose up` interno.
-- [`services/core/README.md`](../services/core/README.md): `mvn spring-boot:run`.
-- [`services/ml/notebook/README.md`](../services/ml/notebook/README.md): `jupyter notebook`.
-- [`apps/consultor-mobile/README.md`](../apps/consultor-mobile/README.md): `npm start`.
+## Rodar sem Docker
+
+Útil para depurar um serviço de cada vez. Requer Postgres 16, JDK 21 + Maven, Python 3.11+ e Node 20.
+
+```bash
+# 1) bancos
+psql -U postgres -f infra/postgres/init.sql       # cria previopls_core e previopls_gateway (owner previopls)
+
+# 2) ml-api (porta 8000)
+cd services/ml/api && pip install -r requirements.txt && python -m app.build_default_model
+uvicorn app.main:app --port 8000
+
+# 3) core (porta 5000)
+cd services/core
+DATABASE_URL=jdbc:postgresql://localhost:5432/previopls_core DB_USERNAME=previopls DB_PASSWORD=previopls \
+ML_API_URL=http://localhost:8000 JWT_SECRET=dev-only-change-me-this-key-must-be-at-least-32-bytes-long \
+mvn spring-boot:run
+
+# 4) gateway em modo proxy (porta 8001; o entrypoint aplica as migrations)
+cd services/gateway && pip install -r requirements.txt
+APP_ENV=development PORT=8001 \
+DATABASE_URL=postgresql+psycopg://previopls:previopls@localhost:5432/previopls_gateway \
+FERNET_KEY=$(python scripts/gen_fernet_key.py) CPF_HASH_PEPPER=dev-pepper-com-pelo-menos-32-bytes-aaaa \
+HMAC_PAYLOAD_SECRET=dev-hmac-com-pelo-menos-32-bytes-aaaaaaaa \
+CORE_API_URL=http://localhost:5000 JWT_SECRET=dev-only-change-me-this-key-must-be-at-least-32-bytes-long \
+./docker-entrypoint.sh
+
+# 5) admin-web (porta 3000)
+cd apps/admin-web && npm install
+INTERNAL_GATEWAY_URL=http://localhost:8001 npm run dev
+```
+
+Fluxo de fumaça (login pelo Gateway, lista de leads vinda do Core):
+
+```bash
+TOKEN=$(curl -s -X POST localhost:8001/v1/auth/login -H 'Content-Type: application/json' \
+  -d '{"email":"consultor@ford.com","senha":"cons123"}' | python -c 'import sys,json;print(json.load(sys.stdin)["access_token"])')
+curl -s -H "Authorization: Bearer $TOKEN" 'localhost:8001/v1/leads?status=aberto&per_page=3'
+```
 
 ## Deploy para piloto
 

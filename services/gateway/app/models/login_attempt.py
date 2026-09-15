@@ -1,10 +1,14 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, Column, DateTime, String
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.db.session import Base
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class LoginAttempt(Base):
@@ -14,4 +18,4 @@ class LoginAttempt(Base):
     email = Column(String(180), nullable=False, index=True)
     success = Column(Boolean, nullable=False)
     remote_ip = Column(String(64), nullable=True)
-    attempted_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
+    attempted_at = Column(DateTime(timezone=True), default=_now, nullable=False, index=True)

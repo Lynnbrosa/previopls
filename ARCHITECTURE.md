@@ -100,18 +100,18 @@ sequenceDiagram
     Fat->>Nginx: POST /v1/clientes (D0) com X-Signature HMAC
     Nginx->>GW: encaminhamento TLS terminado
     GW->>GW: valida HMAC + janela de 5 min
-    GW->>GW: valida JWT do admin
-    GW->>GW: cifra CPF/email/telefone com Fernet
-    GW->>Core: POST /v1/clientes (JWT interno HS256)
+    GW->>GW: valida JWT RS256 do admin + RBAC
+    GW->>GW: valida schema (Pydantic, extra=forbid)
+    GW->>Core: POST /v1/clientes (JWT interno HS256, X-Request-Id)
     Core->>Core: persiste cliente + veiculo (AES-256-GCM em PII)
     Core->>ML: POST /predict (features D0, sem PII)
     ML-->>Core: {perfil, score, latency_ms}
     Core->>Core: derivar prioridade do lead a partir do score
     Core->>DB: insere lead com script comercial do perfil
     Core->>DB: registra audit log
-    Core-->>GW: 201 Created
+    Core-->>GW: 201 Created (PII mascarada)
     GW->>DB: audit log de borda (request_id, ator, ip)
-    GW-->>Nginx: 201 Created (PII mascarada)
+    GW-->>Nginx: 201 Created (resposta do Core repassada)
     Core-->>Push: notificação para o consultor responsável
     Push-->>App: lead crítico chega no aparelho
     App->>App: lead salvo offline (AsyncStorage)
@@ -120,9 +120,11 @@ sequenceDiagram
 
 Pontos importantes:
 
-- A PII em claro aparece em duas camadas (Gateway no Fernet, Core no AES-256-GCM). Defesa em profundidade explícita, ver ADR-004.
+- O Gateway não persiste o domínio no modo proxy: valida, audita e repassa. A PII só descansa no Core, cifrada com AES-256-GCM. A camada Fernet do Gateway protege o que ele mesmo persiste no modo standalone (ver ADR-004).
+- O token externo (RS256) nunca atravessa para a rede interna. O Gateway emite um JWT HS256 por requisição, com TTL de 60 s, assinado com o `JWT_SECRET` compartilhado com o Core (ADR-003). O papel do usuário viaja nesse token e o Core aplica seu próprio RBAC.
 - O ml-api recebe apenas as features D0. Não tem CPF, nome ou contato.
-- O ciclo de auditoria escreve duas vezes: borda (Gateway) e domínio (Core). Eventos correlacionados pelo `request_id` propagado em header.
+- O ciclo de auditoria escreve duas vezes: borda (Gateway) e domínio (Core). Eventos correlacionados pelo `X-Request-Id` propagado em header; o IP de origem chega ao Core via `X-Forwarded-For`.
+- Se o Core estiver indisponível, o Gateway responde `503 CORE_UNAVAILABLE` sem vazar detalhes; o `/health` do Gateway reporta `components.core`.
 - O push é assíncrono. O sucesso da API não depende da entrega real ao aparelho.
 
 ## 4. Fronteiras de confiança e LGPD
@@ -146,7 +148,7 @@ flowchart LR
 
     Net -->|TLS 1.2 plus| Nx
     Nx --> GW2
-    GW2 -->|JWT HS256 interno + body Fernet| Cr2
+    GW2 -->|JWT HS256 interno + X-Request-Id| Cr2
     Cr2 -->|features D0 sem PII| ML2
     Cr2 -->|AES-256-GCM via JPA Converter| DB2
     GW2 -->|audit log + sessões| DB2
@@ -156,9 +158,9 @@ Mapa de PII e proteção:
 
 | Dado            | Origem            | Em trânsito           | Em repouso                  | Em log         | Em resposta     |
 |-----------------|-------------------|------------------------|------------------------------|----------------|------------------|
-| CPF             | Faturamento       | TLS + HMAC body        | Fernet (Gateway) + hash HMAC | Mascarado      | Mascarado        |
-| Email           | Faturamento       | TLS + HMAC body        | Fernet (Gateway) + AES-256-GCM (Core) | Mascarado | Mascarado |
-| Telefone        | Faturamento       | TLS + HMAC body        | Fernet (Gateway) + AES-256-GCM (Core) | Mascarado | Mascarado |
+| CPF             | Faturamento       | TLS + HMAC body        | Core: plaintext com índice único (busca por igualdade); Gateway standalone: Fernet + hash HMAC | Mascarado | Mascarado |
+| Email           | Faturamento       | TLS + HMAC body        | AES-256-GCM (Core); Fernet (Gateway standalone) | Mascarado | Mascarado |
+| Telefone        | Faturamento       | TLS + HMAC body        | AES-256-GCM (Core); Fernet (Gateway standalone) | Mascarado | Mascarado |
 | Nome            | Faturamento       | TLS                    | Plaintext (sem busca por igualdade) | Sem masking automático | Visível ao consultor autorizado |
 | VIN             | Faturamento       | TLS                    | Plaintext (chave de negócio) | Visível        | Visível          |
 | Score / perfil  | ml-api            | TLS interno            | Plaintext                    | Visível        | Visível          |
@@ -274,7 +276,7 @@ Cada ADR registra contexto, decisão e consequência, no estilo Michael Nygard. 
 
 Contexto. A challenge gerou dois backends, um Python (Cybersecurity) e um Java (SOA), que reimplementam endpoints semelhantes. A primeira tentação é eliminar a duplicação consolidando em um único serviço.
 
-Decisão. Manter os dois como camadas distintas. O Gateway Python fica como borda de segurança LGPD. O Core Java fica como serviço de domínio na rede interna. O Gateway é o único ponto exposto. O Core só aceita tráfego do Gateway.
+Decisão. Manter os dois como camadas distintas. O Gateway Python fica como borda de segurança LGPD. O Core Java fica como serviço de domínio na rede interna. O Gateway é o único ponto exposto. O Core só aceita tráfego do Gateway. Na implementação, o Gateway repassa `/v1/clientes` e `/v1/leads*` ao Core quando `CORE_API_URL` está definido (modo proxy, o padrão do compose); sem essa variável ele volta ao comportamento original da challenge e persiste o domínio no próprio banco (modo standalone).
 
 Consequência. Reaproveitamos os controles maduros de ambos os repositórios (Fernet, HMAC, RS256, RBAC, audit) sem trabalho adicional. Pagamos um hop de rede a mais em cada requisição. Em troca, ganhamos defesa em profundidade real, com duas implementações independentes de validação, dois algoritmos de criptografia em PII e dois mecanismos de assinatura JWT. Operacionalmente, o Gateway pode escalar separadamente sob ataque (que é um padrão típico de borda) sem que o Core seja arrastado junto.
 
@@ -300,4 +302,4 @@ Contexto. PII passa duas vezes pelo sistema: chega no Gateway via webhook e segu
 
 Decisão. O Gateway cifra com Fernet (AES-128-CBC + HMAC-SHA256). O Core cifra com AES-256-GCM via `JPA AttributeConverter`. Cada camada gerencia sua própria chave.
 
-Consequência. Vulnerabilidades em uma das duas bibliotecas não comprometem a outra. O ciphertext do Gateway é descriptografado e re-criptografado pelo Core antes de tocar o disco. Em log e dump de banco, mesmo plaintexts geram ciphertexts diferentes em ambas as camadas (IV aleatório por chamada nos dois algoritmos). O custo é dupla manutenção de chaves, aceitável dado o ganho em defesa em profundidade real. O risco residual conhecido é vazamento simultâneo das duas chaves, situação que já implica comprometimento total do ambiente e cuja mitigação cabe ao processo operacional (KMS, rotação, separação de duty).
+Consequência. Vulnerabilidades em uma das duas bibliotecas não comprometem a outra. No modo proxy a PII atravessa o Gateway apenas em memória, dentro de uma requisição validada, e só toca disco no Core já cifrada (o Gateway persiste somente usuários, sessões e auditoria, sem PII de cliente). No modo standalone o Gateway cifra com Fernet o que persiste. Em log e dump de banco, mesmo plaintexts geram ciphertexts diferentes em ambas as camadas (IV aleatório por chamada nos dois algoritmos). O custo é dupla manutenção de chaves, aceitável dado o ganho em defesa em profundidade real. O risco residual conhecido é vazamento simultâneo das duas chaves, situação que já implica comprometimento total do ambiente e cuja mitigação cabe ao processo operacional (KMS, rotação, separação de duty).

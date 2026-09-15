@@ -31,7 +31,7 @@ public class LeadController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('CONSULTOR','ADMIN')")
+    @PreAuthorize("hasAnyRole('CONSULTOR','ADMIN','ANALISTA')")
     @Operation(summary = "Lista leads filtrados por prioridade/status (paginado)")
     public ResponseEntity<LeadListResponse> listar(
             @RequestParam(required = false) PrioridadeLead prioridade,
@@ -43,7 +43,7 @@ public class LeadController {
     }
 
     @GetMapping("/{leadId}")
-    @PreAuthorize("hasAnyRole('CONSULTOR','ADMIN')")
+    @PreAuthorize("hasAnyRole('CONSULTOR','ADMIN','ANALISTA')")
     @Operation(summary = "Visão 360 — cliente + veículo + script comercial")
     public ResponseEntity<LeadDetailResponse> obter(@PathVariable UUID leadId) {
         return ResponseEntity.ok(leadService.obter(leadId));

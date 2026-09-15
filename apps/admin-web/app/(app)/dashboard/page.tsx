@@ -4,14 +4,7 @@ import { listLeads } from '@/lib/api';
 import { formatPercent } from '@/lib/utils';
 import type { LeadListItem, Prioridade } from '@/types/api';
 
-const PRIORIDADES: Prioridade[] = ['CRITICA', 'ALTA', 'MEDIA', 'BAIXA'];
-
-const PRIORIDADE_COR: Record<Prioridade, string> = {
-  CRITICA: 'bg-red-600 text-white',
-  ALTA: 'bg-orange-500 text-white',
-  MEDIA: 'bg-yellow-500 text-white',
-  BAIXA: 'bg-slate-300 text-slate-700',
-};
+import { PRIORIDADES, PRIORIDADE_COR, PRIORIDADE_HEX, PRIORIDADE_LABEL } from '@/lib/labels';
 
 interface DashboardStats {
   totalLeads: number;
@@ -23,12 +16,12 @@ interface DashboardStats {
 async function loadStats(): Promise<DashboardStats> {
   const page = await listLeads({ perPage: 100 });
   const items = page.items ?? [];
-  const porPrioridade: Record<Prioridade, number> = { CRITICA: 0, ALTA: 0, MEDIA: 0, BAIXA: 0 };
+  const porPrioridade: Record<Prioridade, number> = { critica: 0, alta: 0, media: 0, baixa: 0 };
   for (const lead of items) {
     porPrioridade[lead.prioridade] = (porPrioridade[lead.prioridade] ?? 0) + 1;
   }
   const criticos = items
-    .filter((l) => l.prioridade === 'CRITICA' && l.status === 'aberto')
+    .filter((l) => l.prioridade === 'critica' && l.status === 'aberto')
     .sort((a, b) => b.scoreRisco - a.scoreRisco)
     .slice(0, 8);
   const abertos = items.filter((l) => l.status === 'aberto').length;
@@ -90,12 +83,12 @@ export default async function DashboardPage() {
             <p className="eyebrow">Distribuição por prioridade</p>
           </div>
           <div className="card-body">
-            <PerfilPie data={pieData} />
+            <PerfilPie data={pieData} colors={PRIORIDADE_HEX} />
             <ul className="mt-6 space-y-3 text-sm">
               {pieData.map((row) => (
                 <li key={row.perfil} className="flex items-center justify-between">
                   <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${PRIORIDADE_COR[row.perfil as Prioridade]}`}>
-                    {row.perfil}
+                    {PRIORIDADE_LABEL[row.perfil as Prioridade]}
                   </span>
                   <span className="font-semibold text-slate-800">{row.count}</span>
                 </li>
@@ -132,7 +125,7 @@ export default async function DashboardPage() {
                       </div>
                       <div className="flex items-center gap-2 whitespace-nowrap">
                         <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${PRIORIDADE_COR[lead.prioridade]}`}>
-                          {lead.prioridade}
+                          {PRIORIDADE_LABEL[lead.prioridade]}
                         </span>
                         <span className="text-xs font-semibold text-slate-700">{formatPercent(lead.scoreRisco)}</span>
                       </div>

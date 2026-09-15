@@ -4,7 +4,9 @@ import com.previopls.entity.AuditLog;
 import com.previopls.entity.enums.AuditAction;
 import com.previopls.repository.AuditLogRepository;
 import com.previopls.security.RequestContext;
-import org.springframework.scheduling.annotation.Async;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +18,10 @@ import java.util.UUID;
  *
  * Cada chamada cria uma nova transação ({@link Propagation#REQUIRES_NEW}) — o
  * audit é persistido mesmo que a transação de negócio principal rollback.
+ *
+ * Quando o chamador não informa o ator, o serviço preenche {@code actorId} e
+ * {@code actorRole} a partir do JWT autenticado na requisição (inclusive o JWT
+ * interno emitido pelo Gateway), para que a trilha responda "quem fez".
  */
 @Service
 public class AuditService {
@@ -34,6 +40,23 @@ public class AuditService {
                     String entityType,
                     String entityId,
                     String details) {
+        if (actorId == null || actorRole == null) {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.isAuthenticated() && auth.getName() != null) {
+                if (actorId == null) {
+                    actorId = parseUuid(auth.getName());
+                }
+                if (actorRole == null) {
+                    actorRole = auth.getAuthorities().stream()
+                            .map(GrantedAuthority::getAuthority)
+                            .filter(a -> a.startsWith("ROLE_"))
+                            .map(a -> a.substring(5).toLowerCase())
+                            .findFirst()
+                            .orElse(null);
+                }
+            }
+        }
+
         AuditLog log = new AuditLog();
         log.setAction(action);
         log.setActorId(actorId);
@@ -48,6 +71,14 @@ public class AuditService {
         log.setUserAgent(ua);
         log.setDetails(details);
         repository.save(log);
+    }
+
+    private static UUID parseUuid(String value) {
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     public void logLoginSuccess(UUID userId, String email, String role) {

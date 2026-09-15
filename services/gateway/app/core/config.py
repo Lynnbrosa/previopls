@@ -1,6 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     app_name: str = "previo-pls-security"
     app_version: str = "1.0.0"
 
+    # Prefixo público quando o Gateway roda atrás de um proxy que remove o
+    # prefixo (nginx: /api/v1/* -> /v1/*). Afeta apenas /docs e /openapi.json.
+    root_path: str = ""
+
     database_url: str = "postgresql+psycopg://previopls:previopls@localhost:5432/previopls"
 
     jwt_private_key_path: Path = Path("./keys/jwt_private.pem")
@@ -26,10 +30,27 @@ class Settings(BaseSettings):
     jwt_audience: str = "previo-pls-clients"
     jwt_access_ttl_minutes: int = 15
     jwt_refresh_ttl_days: int = 7
+    # Gera o par RSA automaticamente se os arquivos não existirem.
+    # Default: apenas fora de produção (em prod as chaves vêm de KMS/Secret Files).
+    jwt_auto_generate_keys: Optional[bool] = None
 
     fernet_key: str = Field(..., min_length=32)
     cpf_hash_pepper: str = Field(..., min_length=16)
     hmac_payload_secret: str = Field(..., min_length=16)
+
+    # ---- Integração com o Core (Spring Boot) — ADR-001 / ADR-003 ----------
+    # Quando CORE_API_URL está definido, /v1/clientes e /v1/leads* são
+    # repassados ao Core com um JWT interno HS256 assinado com JWT_SECRET
+    # (o mesmo segredo configurado no Core). Vazio = modo standalone
+    # (o Gateway persiste o domínio no próprio banco, comportamento original).
+    core_api_url: str = ""
+    jwt_secret: str = ""
+    core_timeout_seconds: float = 5.0
+    core_internal_token_ttl_seconds: int = 60
+
+    # Cria admin@ford.com / consultor@ford.com / analista@ford.com no boot.
+    # Default: apenas fora de produção.
+    seed_default_users: Optional[bool] = None
 
     cors_origins: str = ""
     rate_limit_global: str = "100/minute"
@@ -49,6 +70,11 @@ class Settings(BaseSettings):
     def _validate_origins(cls, v: str) -> str:
         return v.strip()
 
+    @field_validator("core_api_url", "root_path")
+    @classmethod
+    def _strip_trailing_slash(cls, v: str) -> str:
+        return v.strip().rstrip("/")
+
     @property
     def cors_origin_list(self) -> List[str]:
         if not self.cors_origins:
@@ -58,6 +84,22 @@ class Settings(BaseSettings):
     @property
     def is_prod(self) -> bool:
         return self.app_env.lower() == "production"
+
+    @property
+    def core_proxy_enabled(self) -> bool:
+        return bool(self.core_api_url)
+
+    @property
+    def should_seed_default_users(self) -> bool:
+        if self.seed_default_users is None:
+            return not self.is_prod
+        return self.seed_default_users
+
+    @property
+    def should_auto_generate_keys(self) -> bool:
+        if self.jwt_auto_generate_keys is None:
+            return not self.is_prod
+        return self.jwt_auto_generate_keys
 
 
 @lru_cache
