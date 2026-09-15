@@ -29,8 +29,13 @@ class AuthService:
         self._settings = get_settings()
 
     def login(self, email: str, senha: str, request: Request) -> TokenPair:
+        email = email.strip().lower()
+
         if self.lockout.is_locked(email):
             self.audit.log_event(action=AuditAction.LOGIN_LOCKED, request=request, actor_email=email)
+            # Quem levanta exceção não passa pelo db.commit() do handler: persiste aqui,
+            # senão a trilha da tentativa bloqueada é descartada no rollback da sessão.
+            self.db.commit()
             raise UnauthorizedError("Conta temporariamente bloqueada. Tente novamente em alguns minutos.")
 
         usuario = self.db.scalar(select(Usuario).where(Usuario.email == email))
@@ -46,6 +51,8 @@ class AuthService:
                 details="usuario_inexistente" if usuario is None else "senha_invalida",
             )
             maybe_alert_login_brute_force(email, self.audit, request)
+            # Mesma razão: sem este commit a tentativa falha nunca conta para o lockout.
+            self.db.commit()
             raise UnauthorizedError("Credenciais inválidas")
 
         role = Role(usuario.papel.value)

@@ -90,7 +90,7 @@ class Settings(BaseSettings):
 
     @property
     def is_prod(self) -> bool:
-        return self.app_env.lower() == "production"
+        return self.app_env.strip().lower() in {"production", "prod"}
 
     @property
     def core_proxy_enabled(self) -> bool:

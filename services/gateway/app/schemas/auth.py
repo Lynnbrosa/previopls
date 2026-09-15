@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.models import RolePapel
 
@@ -8,6 +8,12 @@ class LoginRequest(BaseModel):
 
     email: EmailStr = Field(..., max_length=180)
     senha: str = Field(..., min_length=6, max_length=128)
+
+    @field_validator("email", mode="after")
+    @classmethod
+    def _lowercase_email(cls, v: str) -> str:
+        # Usuários são gravados em minúsculo; "Admin@Ford.com" precisa autenticar igual.
+        return v.strip().lower()
 
 
 class TokenPair(BaseModel):

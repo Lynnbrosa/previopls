@@ -35,11 +35,20 @@ async def lifespan(app: FastAPI):
     try:
         with SessionLocal() as db:
             created_admin = bootstrap_admin(db)
-            created = seed_default_users(db) if settings.should_seed_default_users else 0
-        log.info("seed.done", bootstrap_admin=created_admin, demo_users_created=created,
-                 demo_seed_enabled=settings.should_seed_default_users)
+        log.info("seed.bootstrap_admin", created=created_admin,
+                 configured=bool(settings.bootstrap_admin_email))
     except Exception as exc:  # não derruba a API: /health vai reportar o banco
-        log.error("seed.failed", error=str(exc))
+        log.error("seed.bootstrap_admin_failed", error=str(exc),
+                  hint="confira BOOTSTRAP_ADMIN_EMAIL e BOOTSTRAP_ADMIN_PASSWORD (min. 6 caracteres)")
+
+    if settings.should_seed_default_users:
+        try:
+            with SessionLocal() as db:
+                created = seed_default_users(db)
+            log.warning("seed.demo_users", created=created,
+                        hint="usuarios de demonstracao com senhas publicas; desligue com SEED_DEFAULT_USERS=false")
+        except Exception as exc:
+            log.error("seed.demo_users_failed", error=str(exc))
 
     log.info(
         "app.started",
