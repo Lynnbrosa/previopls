@@ -1,8 +1,3 @@
-Nomes e RMs,
-Giovanne Charelli Zaniboni Silva | 556223 
-Leonardo Pasquini Baldaia | 557416 
-Gustavo Oliveira de Moura | 555827 
-Lynn Bueno Rosa | 551102
 # PrevioPLS Mobile
 
 App do **Consultor de Serviços** Ford — Sprint Mobile da challenge FIAP 2026.

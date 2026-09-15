@@ -11,7 +11,7 @@ export function LeadCard({ lead }: { lead: LeadListItem }) {
   const scheme = useColorScheme();
   const c = Colors[scheme];
   const router = useRouter();
-  const perfil = perfilFromScore(lead.scoreRisco);
+  const perfil = lead.perfil ?? perfilFromScore(lead.scoreRisco);
 
   return (
     <Pressable

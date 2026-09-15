@@ -1,6 +1,19 @@
 export const FordBlue = '#003478';
 
-export const Colors = {
+export interface ColorPalette {
+  text: string;
+  textSecondary: string;
+  background: string;
+  card: string;
+  border: string;
+  tint: string;
+  danger: string;
+  warning: string;
+  success: string;
+  overlay: string;
+}
+
+export const Colors: Record<'light' | 'dark', ColorPalette> = {
   light: {
     text: '#11181C',
     textSecondary: '#687076',
@@ -25,6 +38,4 @@ export const Colors = {
     success: '#66bb6a',
     overlay: 'rgba(0,0,0,0.6)',
   },
-} as const;
-
-export type ColorPalette = typeof Colors.light;
+};

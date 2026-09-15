@@ -49,6 +49,8 @@ export interface LeadListItem {
   veiculoId: string;
   nomeCliente: string;
   modeloVeiculo: string;
+  /** Perfil classificado pelo ml-api. Ausente em backends antigos — usar perfilFromScore como fallback. */
+  perfil?: PerfilCliente | null;
   scoreRisco: number;
   prioridade: PrioridadeLead;
   status: StatusLead;
