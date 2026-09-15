@@ -1,5 +1,7 @@
 import Link from 'next/link';
-import { listLeads } from '@/lib/api';
+import { redirect } from 'next/navigation';
+import { ApiError, describeApiError, listLeads } from '@/lib/api';
+import { BackendError } from '@/components/backend-error';
 import { formatDate, formatPercent } from '@/lib/utils';
 
 
@@ -30,12 +32,9 @@ export default async function LeadsPage({
       page,
       perPage,
     });
-  } catch {
-    return (
-      <div className="card">
-        <div className="card-body text-sm text-slate-500">Falha ao listar leads.</div>
-      </div>
-    );
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) redirect('/login?motivo=sessao');
+    return <BackendError message={describeApiError(err)} />;
   }
 
   const items = result.items ?? [];

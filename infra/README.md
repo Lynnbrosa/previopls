@@ -113,6 +113,17 @@ TOKEN=$(curl -s -X POST localhost:8001/v1/auth/login -H 'Content-Type: applicati
 curl -s -H "Authorization: Bearer $TOKEN" 'localhost:8001/v1/leads?status=aberto&per_page=3'
 ```
 
+## Problemas comuns
+
+| Sintoma | Causa | O que fazer |
+|---|---|---|
+| Login do painel mostra "O servidor respondeu HTTP 404" ou "Credenciais inválidas" | nginx antigo mandando `/api/auth/login` ao Gateway | `git pull` e `docker compose up --build` (recria nginx e admin-web) |
+| Gateway em crash loop com `database "previopls_gateway" does not exist` | volume `pgdata` criado antes do `init.sql` (por exemplo pelo compose antigo do Gateway) | `docker compose -f infra/docker-compose.yml down -v` e subir de novo (apaga os dados locais) |
+| `docker compose up` falha com porta 5000 em uso (macOS) | AirPlay Receiver usa a 5000 | `CORE_HOST_PORT=5001` no `infra/.env` |
+| Login correto responde 401 | 5 falhas nos últimos 15 min para aquele e-mail (lockout) ou 6+ logins no mesmo minuto pelo mesmo IP (429) | aguardar; o lockout expira sozinho |
+| Gateway em produção sem nenhum usuário | `SEED_DEFAULT_USERS` desligado e `BOOTSTRAP_ADMIN_*` não definidos | definir `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` ou `python -m app.db.seed` no shell do container |
+| `http://localhost:3000` ou `:5000` redireciona sozinho para https | HSTS gravado no navegador para `localhost` por uma versão antiga do nginx | remover `localhost` em `chrome://net-internals/#hsts` (Chrome) ou limpar dados do site (Firefox); a versão atual não envia HSTS para localhost |
+
 ## Deploy para piloto
 
 A pasta [`deploy/`](deploy/) contém as specs por provedor: Vercel para o admin-web, Render para os 3 backends, Neon para o Postgres. Stack escolhida por priorizar free tier sem cartão amarrado. Não há comando de deploy automatizado; o deploy é manual.

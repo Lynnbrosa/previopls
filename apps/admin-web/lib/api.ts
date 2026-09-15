@@ -27,8 +27,10 @@ export function forwardingHeaders(request: Request): Record<string, string> {
   const headers: Record<string, string> = {};
   // X-Real-IP é definido pelo proxy confiável (nginx/Vercel) a partir da conexão e não pode ser
   // forjado pelo cliente; X-Forwarded-For fica como fallback (primeiro salto).
-  const clientIp = request.headers.get('x-real-ip') ?? request.headers.get('x-forwarded-for')?.split(',')[0];
-  if (clientIp && clientIp.trim()) headers['X-Forwarded-For'] = clientIp.trim();
+  const clientIp = (request.headers.get('x-real-ip') ?? request.headers.get('x-forwarded-for')?.split(',')[0] ?? '').trim();
+  // Só repassa algo com cara de IP (v4/v6) e curto: o gateway grava em VARCHAR(64) e um header
+  // forjado não deve virar erro 500 nem lixo na trilha de auditoria.
+  if (clientIp && clientIp.length <= 64 && /^[0-9a-fA-F.:]+$/.test(clientIp)) headers['X-Forwarded-For'] = clientIp;
   const requestId = request.headers.get('x-request-id');
   if (requestId) headers['X-Request-Id'] = requestId;
   return headers;
@@ -51,15 +53,58 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
+    console.error(`[admin-web] ${init.method ?? 'GET'} ${buildUrl(path)} -> ${res.status} ${body.slice(0, 300)}`);
     throw new ApiError(res.status, body);
   }
   return (await res.json()) as T;
 }
 
 export class ApiError extends Error {
+  /** Código do contrato {error:{code,message}} do gateway/core, quando o corpo é JSON. */
+  public code: string | null = null;
+  public backendMessage: string | null = null;
+
   constructor(public status: number, public body: string) {
     super(`request failed (${status})`);
+    try {
+      const parsed = JSON.parse(body) as { error?: { code?: string; message?: string }; message?: string; detail?: string };
+      this.code = parsed?.error?.code ?? null;
+      this.backendMessage = parsed?.error?.message ?? parsed?.message ?? parsed?.detail ?? null;
+    } catch {
+      // corpo não é JSON (proxy/plataforma): fica só o status
+    }
   }
+}
+
+/** Host do backend interno, sem credenciais, para aparecer em mensagens de diagnóstico. */
+export function backendLabel(): string {
+  try {
+    return new URL(INTERNAL_BASE).host;
+  } catch {
+    return INTERNAL_BASE;
+  }
+}
+
+/**
+ * Texto para o usuário quando uma leitura do backend falha. Deliberadamente informativo:
+ * o painel é interno e o status/código do backend é o que resolve o problema mais rápido.
+ */
+export function describeApiError(err: unknown): string {
+  const backend = backendLabel();
+  if (err instanceof ApiError) {
+    const suffix = err.code ? ` (${err.status} ${err.code})` : ` (HTTP ${err.status})`;
+    if (err.status === 401) return `Sessão inválida ou expirada${suffix}. Entre novamente.`;
+    if (err.status === 403) return `Seu papel não tem acesso a este recurso${suffix}.`;
+    if (err.status === 404) return `Recurso não encontrado no backend${suffix}.`;
+    if (err.status === 429) return `Limite de requisições do backend atingido${suffix}. Aguarde um minuto.`;
+    if (err.code === 'CORE_UNAVAILABLE') return `O Gateway (${backend}) não conseguiu falar com o Core${suffix}. Verifique CORE_API_URL e se o Core está saudável.`;
+    if (err.status >= 500) return `O backend ${backend} respondeu erro${suffix}${err.backendMessage ? `: ${err.backendMessage}` : ''}.`;
+    return `Falha ao consultar o backend ${backend}${suffix}${err.backendMessage ? `: ${err.backendMessage}` : ''}.`;
+  }
+  if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+    return `O backend ${backend} não respondeu a tempo (pode estar acordando). Tente novamente em alguns segundos.`;
+  }
+  return `Não foi possível conectar ao backend ${backend}. Verifique INTERNAL_GATEWAY_URL e se o serviço está no ar.`;
 }
 
 export async function login(payload: LoginRequest, extraHeaders: Record<string, string> = {}): Promise<LoginResponse> {

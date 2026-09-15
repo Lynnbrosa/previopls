@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { PerfilPie } from '@/components/perfil-pie';
-import { listLeads } from '@/lib/api';
+import { redirect } from 'next/navigation';
+import { ApiError, describeApiError, listLeads } from '@/lib/api';
+import { BackendError } from '@/components/backend-error';
 import { formatPercent } from '@/lib/utils';
 import type { LeadListItem, Prioridade } from '@/types/api';
 
@@ -32,14 +34,9 @@ export default async function DashboardPage() {
   let stats: DashboardStats;
   try {
     stats = await loadStats();
-  } catch {
-    return (
-      <div className="card">
-        <div className="card-body text-sm text-slate-500">
-          Falha ao carregar dados do backend. Verifique se o serviço de domínio está respondendo na rede interna.
-        </div>
-      </div>
-    );
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) redirect('/login?motivo=sessao');
+    return <BackendError message={describeApiError(err)} />;
   }
 
   const pieData = PRIORIDADES.map((prioridade) => ({
