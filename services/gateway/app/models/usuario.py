@@ -1,11 +1,15 @@
 import enum
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime, Enum, String
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.db.session import Base
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class RolePapel(str, enum.Enum):
@@ -23,4 +27,4 @@ class Usuario(Base):
     senha_hash = Column(String(255), nullable=False)
     papel = Column(Enum(RolePapel, name="role_papel", values_callable=lambda x: [e.value for e in x]),
                    nullable=False, default=RolePapel.CONSULTOR)
-    criado_em = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    criado_em = Column(DateTime(timezone=True), default=_now, nullable=False)

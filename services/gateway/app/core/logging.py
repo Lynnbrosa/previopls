@@ -8,7 +8,7 @@ import structlog
 from app.core.config import get_settings
 
 
-_CPF_RE = re.compile(r"\b(\d{3})\d{5}(\d{3})\b")
+_CPF_RE = re.compile(r"\b(\d{3})\d{6}(\d{2})\b")
 _EMAIL_RE = re.compile(r"\b([A-Za-z0-9._%+-])[A-Za-z0-9._%+-]*(@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b")
 _BEARER_RE = re.compile(r"(?i)(Bearer\s+)[A-Za-z0-9._\-+/=]+")
 _LONG_DIGITS_RE = re.compile(r"\b\d{13,19}\b")

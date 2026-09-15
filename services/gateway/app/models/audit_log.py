@@ -1,11 +1,15 @@
 import enum
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime, Enum, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.db.session import Base
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class AuditAction(str, enum.Enum):
@@ -41,4 +45,4 @@ class AuditLog(Base):
     remote_ip = Column(String(64), nullable=True)
     user_agent = Column(String(255), nullable=True)
     details = Column(Text, nullable=True)
-    occurred_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
+    occurred_at = Column(DateTime(timezone=True), default=_now, nullable=False, index=True)
