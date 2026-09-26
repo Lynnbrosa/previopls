@@ -51,7 +51,9 @@ Códigos que aparecem na mensagem:
 
 - `503 CORE_UNAVAILABLE`: o Gateway não conseguiu falar com o Core. Transitório em free tier; o card tenta de novo a cada 20 s (até 15 vezes) e some sozinho quando o Core sobe.
 - `502 CORE_AUTH_MISMATCH`: o Core rejeitou o token interno do Gateway. `JWT_SECRET` precisa ser idêntico nos dois serviços da Render. Não é transitório: o card não insiste.
-- `HTTP 504` sem código: a função da Vercel foi cortada. As páginas declaram `maxDuration = 60`, o máximo do plano Hobby sem Fluid Compute; não aumente sem mudar de plano.
+- `HTTP 504` sem código: quem respondeu 504 foi o proxy na frente do Gateway (Render, ou o nginx no compose), não a Vercel: o Gateway não respondeu ao próprio proxy a tempo. Transitório; o card tenta de novo.
+
+Se, em vez do card, aparecer a página de erro da própria Vercel (`FUNCTION_INVOCATION_TIMEOUT`), a função foi cortada antes do backend responder. As páginas declaram `maxDuration = 60`: no Hobby **sem** Fluid Compute esse é o teto (o default seria 10 s). **Com** Fluid Compute (padrão em projetos criados a partir de 2025, Settings → Functions) o default já é 300 s e o valor de 60 s só encurta a espera; pode subir até 300 s sem mudar de plano.
 
 ## Domínio público
 

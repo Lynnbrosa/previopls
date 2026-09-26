@@ -183,6 +183,34 @@ def test_warm_up_core_runs_once_in_background_and_swallows_errors():
     assert warm_up_core(client=client, timeout_seconds=0) is None  # CORE_WARMUP_SECONDS=0 desliga
 
 
+def test_warm_up_core_releases_flag_when_thread_cannot_start(monkeypatch: pytest.MonkeyPatch):
+    import threading
+
+    client = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200)), base_url="http://core.test:5000")
+
+    def boom(self):  # noqa: ANN001
+        raise RuntimeError("can't start new thread")
+
+    monkeypatch.setattr(threading.Thread, "start", boom)
+    assert warm_up_core(client=client) is None  # não propaga para o login
+    monkeypatch.undo()
+    again = warm_up_core(client=client)
+    assert again is not None  # a flag foi liberada
+    again.join(2)
+
+
+def test_warm_up_core_swallows_unexpected_errors_and_releases_flag():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise ValueError("transporte quebrado")
+
+    client = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://core.test:5000")
+    thread = warm_up_core(client=client)
+    assert thread is not None
+    thread.join(2)
+    assert not thread.is_alive()
+    assert warm_up_core(client=client) is not None  # liberado apesar do erro inesperado
+
+
 def test_forward_passes_upstream_errors_through():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(409, json={"error": {"code": "CONFLICT", "message": "Cliente já cadastrado"}})

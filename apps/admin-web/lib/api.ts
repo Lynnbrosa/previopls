@@ -92,8 +92,10 @@ export function backendLabel(): string {
  * Texto para o usuário quando uma leitura do backend falha. Deliberadamente informativo:
  * o painel é interno e o status/código do backend é o que resolve o problema mais rápido.
  */
-export function describeApiError(err: unknown): string {
+export function describeApiError(err: unknown, opts: { autoRetry?: boolean } = {}): string {
   const backend = backendLabel();
+  // Só quem realmente tenta de novo (o card de erro) promete isso; a route de PATCH não tenta.
+  const retry = opts.autoRetry ? 'O painel tenta de novo sozinho.' : 'Tente novamente em alguns segundos.';
   if (err instanceof ApiError) {
     const suffix = err.code ? ` (${err.status} ${err.code})` : ` (HTTP ${err.status})`;
     if (err.status === 401) return `Sessão inválida ou expirada${suffix}. Entre novamente.`;
@@ -104,13 +106,16 @@ export function describeApiError(err: unknown): string {
       return `O Gateway (${backend}) autenticou você, mas o Core rejeitou o token interno${suffix}. JWT_SECRET precisa ser o mesmo no gateway e no core; relógios dessincronizados entre os dois também causam isso.`;
     }
     if (err.code === 'CORE_UNAVAILABLE') {
-      return `O Gateway (${backend}) não conseguiu falar com o Core${suffix}. Se o Core roda em free tier ele pode estar acordando; o painel tenta de novo sozinho.`;
+      return `O Gateway (${backend}) não conseguiu falar com o Core${suffix}. Se o Core roda em free tier ele pode estar acordando. ${retry}`;
     }
     if (err.status >= 500) return `O backend ${backend} respondeu erro${suffix}${err.backendMessage ? `: ${err.backendMessage}` : ''}.`;
     return `Falha ao consultar o backend ${backend}${suffix}${err.backendMessage ? `: ${err.backendMessage}` : ''}.`;
   }
   if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
-    return `O backend ${backend} não respondeu a tempo (pode estar acordando). O painel tenta de novo sozinho.`;
+    return `O backend ${backend} não respondeu a tempo (pode estar acordando). ${retry}`;
+  }
+  if (err instanceof SyntaxError) {
+    return `O backend ${backend} respondeu, mas o corpo não é JSON. A URL em INTERNAL_GATEWAY_URL aponta para outro serviço ou proxy?`;
   }
   return `Não foi possível conectar ao backend ${backend}. Verifique INTERNAL_GATEWAY_URL e se o serviço está no ar.`;
 }
@@ -121,6 +126,8 @@ export function isTransientError(err: unknown): boolean {
     if (err.code === 'CORE_AUTH_MISMATCH') return false; // configuração: insistir não resolve
     return err.status === 502 || err.status === 503 || err.status === 504;
   }
+  // 2xx cujo corpo não é JSON (URL apontando para outro serviço): determinístico, insistir não resolve.
+  if (err instanceof SyntaxError) return false;
   return true; // rede, DNS, timeout
 }
 

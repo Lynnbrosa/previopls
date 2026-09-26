@@ -9,5 +9,6 @@ import { describeApiError, diagnoseBackend, isTransientError } from '@/lib/api';
  */
 export async function BackendError({ error }: { error: unknown }) {
   const diagnosis = await diagnoseBackend();
-  return <BackendErrorCard message={describeApiError(error)} retryable={isTransientError(error)} diagnosis={diagnosis} />;
+  const retryable = isTransientError(error);
+  return <BackendErrorCard message={describeApiError(error, { autoRetry: retryable })} retryable={retryable} diagnosis={diagnosis} />;
 }

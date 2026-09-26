@@ -167,12 +167,22 @@ def warm_up_core(
             log.info("core.warmup", status_code=r.status_code)
         except httpx.HTTPError as exc:
             log.warning("core.warmup_failed", error=type(exc).__name__)
+        except Exception as exc:  # nunca deixa a thread morrer com traceback cru no stderr
+            log.warning("core.warmup_failed", error=type(exc).__name__, unexpected=True)
         finally:
             with _warmup_lock:
                 _warmup_running = False
 
     thread = threading.Thread(target=_run, name="core-warmup", daemon=True)
-    thread.start()
+    try:
+        thread.start()
+    except Exception as exc:
+        # Sem thread disponível: libera a flag e segue. O login já foi confirmado no banco e
+        # não pode virar 500 por causa do aquecimento.
+        with _warmup_lock:
+            _warmup_running = False
+        log.warning("core.warmup_failed", error=type(exc).__name__, stage="start")
+        return None
     return thread
 
 

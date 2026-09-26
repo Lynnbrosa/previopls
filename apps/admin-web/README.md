@@ -36,7 +36,7 @@ Atrás do nginx do compose, só `/api/v1/*`, `/api/health`, `/api/docs` e `/api/
 
 As páginas protegidas capturam a falha da leitura e renderizam `components/backend-error.tsx`, um server component que consulta `/health` e `/version` do backend na hora e entrega ao card cliente (`backend-error-card.tsx`) a mensagem traduzida (`describeApiError`), se o erro é transitório (`isTransientError`) e o diagnóstico da cadeia painel → gateway → banco → core. O card tenta de novo sozinho a cada 20 s (até 15 vezes) para erros transitórios (`503 CORE_UNAVAILABLE`, timeout, rede) e para no primeiro erro de configuração (`502 CORE_AUTH_MISMATCH`, `JWT_SECRET` divergente entre gateway e core). Um 401 do backend não vira card: a página redireciona para `/login?motivo=sessao`.
 
-As páginas e route handlers declaram `maxDuration = 60` e as leituras esperam até 50 s pelo backend, o suficiente para o cold start do Gateway em free tier sem estourar o limite da Vercel.
+As páginas e route handlers declaram `maxDuration = 60` e as leituras esperam até 50 s pelo backend, o suficiente para o cold start do Gateway em free tier sem estourar o limite da Vercel. No compose, o nginx espera 60 s nas rotas do painel (`proxy_read_timeout`) para acomodar esse orçamento; nas rotas do Gateway continua em 30 s.
 
 ## Variáveis de ambiente
 
